@@ -6,7 +6,8 @@
 //------------------------------------------------------------------------------
 #include "../External/SDK/VisualStudio/VisualStudio.bff"
 #include "../External/SDK/Windows/Windows.bff"
-.ClangBasePath      = '../External/SDK/ClangForWindows/5.0.1'
+
+.ClangBasePath = 'C:\Program Files\LLVM'
 
 //------------------------------------------------------------------------------
 // Settings
@@ -31,10 +32,10 @@ Compiler( 'Compiler-x64Clang' )
 {
     .Root       = '$ClangBasePath$'
     .Executable = '$Root$\bin\clang++.exe'
-    .ExtraFiles = {
-                    '$Root$\bin\msvcp140.dll'
-                    '$Root$\bin\vcruntime140.dll'
-                  }
+    // .ExtraFiles = {
+    //                 '$Root$\bin\msvcp140.dll'
+    //                 '$Root$\bin\vcruntime140.dll'
+    //               }
 }
 Compiler( 'Compiler-x64-Linux' )
 {
