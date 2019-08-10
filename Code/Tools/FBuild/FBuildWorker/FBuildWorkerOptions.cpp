@@ -14,7 +14,7 @@
 // system
 #include <stdio.h>
 #if defined( __WINDOWS__ )
-    #include <windows.h>
+    #include "Core/Env/WindowsHeader.h"
 #endif
 
 // FBuildWorkerOptions (CONSTRUCTOR)
@@ -58,26 +58,28 @@ bool FBuildWorkerOptions::ProcessCommandLine( const AString & commandLine )
         }
         else if ( token.BeginsWith( "-cpus=" ) )
         {
-            int32_t numCPUs = Env::GetNumProcessors();
+            int32_t numCPUs = (int32_t)Env::GetNumProcessors();
             int32_t num( 0 );
-            if ( sscanf( token.Get() + 6, "%i", &num ) == 1 )
+            PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
+            if ( sscanf( token.Get() + 6, "%i", &num ) == 1 ) // TODO:C consider sscanf_s
+            PRAGMA_DISABLE_POP_MSVC // 4996
             {
                 if ( token.EndsWith( '%' ) )
                 {
                     num = (int32_t)( numCPUs * (float)num / 100.0f );
-                    m_CPUAllocation = Math::Clamp( num, 1, numCPUs );
+                    m_CPUAllocation = (uint32_t)Math::Clamp( num, 1, numCPUs );
                     m_OverrideCPUAllocation = true;
                     continue;
                 }
                 else if ( num > 0 )
                 {
-                    m_CPUAllocation = Math::Clamp( num, 1, numCPUs );
+                    m_CPUAllocation = (uint32_t)Math::Clamp( num, 1, numCPUs );
                     m_OverrideCPUAllocation = true;
                     continue;
                 }
                 else if ( num < 0 )
                 {
-                    m_CPUAllocation = Math::Clamp( ( numCPUs + num ), 1, numCPUs );
+                    m_CPUAllocation = (uint32_t)Math::Clamp( ( numCPUs + num ), 1, numCPUs );
                     m_OverrideCPUAllocation = true;
                     continue;
                 }
@@ -128,7 +130,7 @@ bool FBuildWorkerOptions::ProcessCommandLine( const AString & commandLine )
 void FBuildWorkerOptions::ShowUsageError()
 {
     const char * msg = "FBuildWorker.exe - " FBUILD_VERSION_STRING "\n"
-                       "Copyright 2012-2018 Franta Fulin - http://www.fastbuild.org\n"
+                       "Copyright 2012-2019 Franta Fulin - http://www.fastbuild.org\n"
                        "\n"
                        "Command Line Options:\n"
                        "------------------------------------------------------------\n"

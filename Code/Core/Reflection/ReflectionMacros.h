@@ -4,8 +4,11 @@
 
 // Includes
 //------------------------------------------------------------------------------
+#include "Core/Reflection/PropertyType.h"
 #include "Core/Reflection/ReflectionInfo.h"
 #include "Core/Reflection/MetaData/MetaData.h"
+
+#include <stddef.h>
 
 // Forward Declarations
 //------------------------------------------------------------------------------
@@ -49,7 +52,9 @@ class ReflectionInfo;
     const ReflectionInfo * className::s_ReflectionInfo( nullptr ); \
     const ReflectionInfo * className::GetReflectionInfoS() \
     { \
+        PRAGMA_DISABLE_PUSH_MSVC( 4946 ) \
         return reinterpret_cast< const ReflectionInfo * >( &g_##className##_ReflectionInfo ); \
+        PRAGMA_DISABLE_POP_MSVC \
     } \
     class className##_ReflectionInfo : public ReflectionInfo \
     { \
@@ -65,7 +70,7 @@ class ReflectionInfo;
             m_SuperClass = reinterpret_cast< const ReflectionInfo * >( &g_##baseClass##_ReflectionInfo ); \
             ADD_METADATA( metaData ) \
         } \
-        virtual ~className##_ReflectionInfo() \
+        virtual ~className##_ReflectionInfo() override\
         { \
             className::s_ReflectionInfo = nullptr; \
         }
@@ -132,19 +137,19 @@ class ReflectionInfo;
 // MEMBERS
 //------------------------------------------------------------------------------
 #define REFLECT( member, memberName, metaData ) \
-            AddProperty( &((objectType *)0)->member, memberName ); \
+            AddProperty( offsetof( objectType, member ), memberName, GetPropertyType( static_cast< decltype( objectType::member ) * >( nullptr ) ) ); \
             ADD_PROPERTY_METADATA( metaData )
 
 #define REFLECT_ARRAY( member, memberName, metaData ) \
-            AddPropertyArray( &((objectType *)0)->member, memberName ); \
+            AddPropertyArray( offsetof( objectType, member ), memberName, GetPropertyArrayType( static_cast< decltype( objectType::member ) * >( nullptr ) ) ); \
             ADD_PROPERTY_METADATA( metaData )
 
 #define REFLECT_STRUCT( member, memberName, structType, metaData ) \
-            AddPropertyStruct( &((objectType *)0)->member, memberName, structType::GetReflectionInfoS() ); \
+            AddPropertyStruct( offsetof( objectType, member ), memberName, structType::GetReflectionInfoS() ); \
             ADD_PROPERTY_METADATA( metaData )
 
 #define REFLECT_ARRAY_OF_STRUCT( member, memberName, structType, metaData ) \
-            AddPropertyArrayOfStruct( &((objectType *)0)->member, memberName, structType::GetReflectionInfoS() ); \
+            AddPropertyArrayOfStruct( offsetof( objectType, member ), memberName, structType::GetReflectionInfoS() ); \
             ADD_PROPERTY_METADATA( metaData )
 
 // END

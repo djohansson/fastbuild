@@ -200,6 +200,14 @@ public:
     static void Error_1501_CompilerFamilyUnrecognized( const BFFIterator & iter,
                                                        const Function * function,
                                                        const AString & badCompilerFamily );
+    static void Error_1502_LightCacheIncompatibleWithCompiler( const BFFIterator & iter,
+                                                               const Function * function );
+
+    // 1900-1999 : User-generate errors
+    //------------------------------------------------------------------------------
+    static void Error_1999_UserError( const BFFIterator & iter,
+                                      const Function * function,
+                                      const AString & errorMessage );
 
 private:
     static void FormatError( const BFFIterator & iter,
