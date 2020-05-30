@@ -57,6 +57,7 @@ public:
 
     static uint64_t GetFileLastWriteTime( const AString & fileName );
     static bool     SetFileLastWriteTime( const AString & fileName, uint64_t fileTime );
+    static bool     SetFileLastWriteTimeToNow( const AString & fileName );
 
     static bool     SetReadOnly( const char * fileName, bool readOnly );
     static bool     GetReadOnly( const char * fileName );
@@ -81,13 +82,12 @@ private:
                                    const char * wildCard,
                                    Array< AString > * results );
     static void GetFilesRecurseEx( AString & path,
-                                 const Array< AString > * patterns,
-                                 Array< FileInfo > * results );
+                                   const Array< AString > * patterns,
+                                   Array< FileInfo > * results );
     static void GetFilesNoRecurseEx( const char * path,
-                                 const Array< AString > * patterns,
-                                 Array< FileInfo > * results );
+                                     const Array< AString > * patterns,
+                                     Array< FileInfo > * results );
     static bool IsMatch( const Array< AString > * patterns, const char * fileName );
-
 };
 
 //------------------------------------------------------------------------------
