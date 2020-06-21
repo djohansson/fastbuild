@@ -740,7 +740,7 @@ bool BFFParser::ParseUserFunctionCall( BFFTokenRange & iter, const BFFUserFuncti
 
     // Isolate stack frame (function calls cannot access anything outside
     // of their own scope)
-    frame.DisconnectStackChain();
+    //frame.DisconnectStackChain(); // [djo]: TEMP - should use return value from functions instead of hacking this
 
     // Invoke function
     BFFTokenRange functionImplementation( function.GetBodyTokenRange() );
