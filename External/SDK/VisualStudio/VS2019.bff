@@ -1,7 +1,17 @@
 // Visual Studio 2019
 //------------------------------------------------------------------------------
-.VS2019_BasePath         = '$_CURRENT_BFF_DIR_$/2019/Community'
+#if exists(VS2019)
+#import VS2019
+.VS2019_BasePath = '$VS2019$'
+#else
+.VS2019_BasePath = '$_CURRENT_BFF_DIR_$/2019/Community'
+#endif
+#if exists(VS2019_VERSION)
+#import VS2019_VERSION
+.VS2019_Version = '$VS2019_VERSION$'
+#else
 .VS2019_Version          = '14.25.28610'
+#endif
 .VS2019_ToolchainPath    = '$VS2019_BasePath$/VC/Tools/MSVC/$VS2019_Version$'
 
 // X64 Compiler

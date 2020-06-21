@@ -3,12 +3,25 @@
 
 // Root Paths
 //------------------------------------------------------------------------------
-.Windows10_SDKBasePath          = '$_CURRENT_BFF_DIR_$/10'
-.Windows10_SDKVersion           = '10.0.17763.0'
+#if exists(WINDOWS_SDK)
+#import WINDOWS_SDK
+.Windows10_SDKBasePath = '$WINDOWS_SDK$'
+#else
+.Windows10_SDKBasePath = '$_CURRENT_BFF_DIR_$/10'
 #if CI_BUILD
     .Windows10_SDKBasePath      = 'C:\Program Files (x86)\Windows Kits/10'
+#endif
+#endif
+#if exists(WINDOWS_SDK_VERSION)
+#import WINDOWS_SDK_VERSION
+.Windows10_SDKVersion = '$WINDOWS_SDK_VERSION$'
+#else
+.Windows10_SDKVersion = '10.0.17763.0'
+#if CI_BUILD
     .Windows10_SDKVersion       = '10.0.17134.0'
 #endif
+#endif
+
 
 // Defines
 //------------------------------------------------------------------------------
