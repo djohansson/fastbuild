@@ -17765,7 +17765,9 @@ void LinkerNode::GetAssemblyResourceFiles( AString & fullArgs, const AString & p
 
 
  if ( ( linkerName.EndsWithI( "link.exe" ) ) ||
-   ( linkerName.EndsWithI( "link" ) ) )
+   ( linkerName.EndsWithI( "link" ) ) ||
+   ( linkerName.EndsWithI( "lld-link.exe" ) ) ||
+   ( linkerName.EndsWithI( "lld-link" ) ))
  {
   flags |= LinkerNode::LINK_FLAG_MSVC;
  }
