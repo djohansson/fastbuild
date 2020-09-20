@@ -572,7 +572,7 @@ void Node::SetLastBuildTime( uint32_t ms )
         }
         case PT_STRUCT:
         {
-            const auto & propertyS = static_cast< const ReflectedPropertyStruct & >( property );
+            const ReflectedPropertyStruct & propertyS = static_cast< const ReflectedPropertyStruct & >( property );
 
             if ( property.IsArray() )
             {
@@ -738,7 +738,7 @@ bool Node::Deserialize( NodeGraph & nodeGraph, IOStream & stream )
         }
         case PT_STRUCT:
         {
-            const auto & propertyS = static_cast< const ReflectedPropertyStruct & >( property );
+            const ReflectedPropertyStruct & propertyS = static_cast< const ReflectedPropertyStruct & >( property );
 
             if ( property.IsArray() )
             {
@@ -796,11 +796,10 @@ void Node::ReplaceDummyName( const AString & newName )
 // DumpOutput
 //------------------------------------------------------------------------------
 /*static*/ void Node::DumpOutput( Job * job,
-                                  const char * data,
-                                  uint32_t dataSize,
+                                  const AString & output,
                                   const Array< AString > * exclusions )
 {
-    if ( ( data == nullptr ) || ( dataSize == 0 ) )
+    if ( output.IsEmpty() )
     {
         return;
     }
@@ -808,7 +807,8 @@ void Node::ReplaceDummyName( const AString & newName )
     // preallocate a large buffer
     AString buffer( MEGABYTE );
 
-    const char * end = data + dataSize;
+    const char * data = output.Get();
+    const char * end = output.GetEnd();
     while( data < end )
     {
         // find the limits of the current line
@@ -848,7 +848,7 @@ void Node::ReplaceDummyName( const AString & newName )
                 copy += '\n';
 
                 // Clang format fixup for Visual Studio
-                // (FBuild is null in remote context - fixup occurs on master)
+                // (FBuild is null in remote context - fixup occurs on fbuild client machine)
                 if ( FBuild::IsValid() && FBuild::Get().GetOptions().m_FixupErrorPaths )
                 {
                     FixupPathForVSIntegration( copy );
