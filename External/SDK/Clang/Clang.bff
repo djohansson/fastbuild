@@ -11,10 +11,11 @@
     #define USING_CLANG_8
 #endif
 #if __WINDOWS__
-    #define USING_CLANG_7
+    //#define USING_CLANG_7
     //#define USING_CLANG_8
     //#define USING_CLANG_9
     //#define USING_CLANG_10
+    #define USING_CLANG_11
 #endif
 
 // Activate
@@ -52,6 +53,9 @@
     #endif
     #if USING_CLANG_10
         #include "Windows/Clang10.bff"
+    #endif
+    #if USING_CLANG_11
+        #include "Windows/Clang11.bff"
     #endif
 #endif
 
