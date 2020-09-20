@@ -1,8 +1,13 @@
 // Clang 9.x.x
 //------------------------------------------------------------------------------
+#if exists(LLVM)
+#import LLVM
+.Clang9_BasePath = '$LLVM$'
+#else
 .Clang9_BasePath     = '$_CURRENT_BFF_DIR_$/9.0.0'
 #if CI_BUILD
     .Clang9_BasePath = 'C:\Program Files\LLVM'
+#endif
 #endif
 
 // Compiler

@@ -1,20 +1,20 @@
-// Clang 8.x.x
+// Clang 11.x.x
 //------------------------------------------------------------------------------
 #if exists(LLVM)
 #import LLVM
-.Clang8_BasePath = '$LLVM$'
+.Clang11_BasePath = '$LLVM$'
 #else
-.Clang8_BasePath     = '$_CURRENT_BFF_DIR_$/8.0.0'
+.Clang11_BasePath     = '$_CURRENT_BFF_DIR_$/11.0.0.RC2'
 #if CI_BUILD
-    .Clang8_BasePath = 'C:\Program Files\LLVM'
+    .Clang11_BasePath = 'C:\Program Files\LLVM'
 #endif
 #endif
 
 // Compiler
 //------------------------------------------------------------------------------
-Compiler( 'Compiler-Clang8' )
+Compiler( 'Compiler-Clang11' )
 {
-    .Root                           = '$Clang8_BasePath$'
+    .Root                           = '$Clang11_BasePath$'
     .ExtraFiles                     = {
                                         '$Root$/bin/msvcp140.dll'
                                         '$Root$/bin/vcruntime140.dll'
@@ -43,7 +43,7 @@ Compiler( 'Compiler-Clang8' )
     .Platform                       = 'x64Clang'
 
     // Compiler Options
-    .Compiler                       = 'Compiler-Clang8'
+    .Compiler                       = 'Compiler-Clang11'
     .CommonCompilerOptions          = ' -c -g'
 
                                     // Include paths
@@ -67,26 +67,28 @@ Compiler( 'Compiler-Clang8' )
                                     + ' -fmsc-version=$MSC_VER$'
                                     + ' -Xclang -flto-visibility-public-std' // LTO visibility matches MSVC behaviour
 
-                                    // as of v8.0.0, these warnings fire inside system headers
+                                    // as of v11.0.0, these warnings fire inside system headers
                                     + ' -Wno-#pragma-messages'          // warning : %s [-W#pragma-messages]
                                     + ' -Wno-unknown-pragmas'           // unknown pragma ignored [-Wunknown-pragmas]
                                     + ' -Wno-ignored-attributes'        // __declspec attribute 'restrict' is not supported [-Werror,-Wignored-attributes]
                                     + ' -Wno-expansion-to-defined'      // macro expansion producing 'defined' has undefined behavior [-Wexpansion-to-defined]
                                     + ' -Wno-nonportable-include-path'  // non-portable path to file '"%s"'; specified path differs in case from file name on disk [-Wnonportable-include-path]
                                     + ' -Wno-ignored-pragma-intrinsic'  // _bittest' is not a recognized builtin; consider including <intrin.h> to access non-builtin intrinsics [-Wignored-pragma-intrinsic]
-                                    + ' -Wno-int-to-void-pointer-cast'  // cast to 'void *' from smaller integer type 'unsigned long' [-Wint-to-void-pointer-cast]
                                     + ' -Wno-deprecated-declarations'   // '_vsnprintf_l' is deprecated : This function or variable may be unsafe.
+
+                                    // Disabled warnings that are not useful
+                                    + ' -Wno-invalid-offsetof'          // we get the offset of members in non-POD types
 
     .CompilerOptions                = ' -o"%2" "%1" $CommonCompilerOptions$'
     .CompilerOptionsC               = ' -x c -o"%2" "%1" $CommonCompilerOptions$'
     .PCHOptions                     = ' -x c++-header "%1" -o"%2" $CommonCompilerOptions$'
 
     // Librarian
-    .Librarian                      = '$Clang8_BasePath$\bin\llvm-ar.exe'
+    .Librarian                      = '$Clang11_BasePath$\bin\llvm-ar.exe'
     .LibrarianOptions               = '/c echo %1 > %2' // 'rc "%2" "%1"' // NOTE: output must come first
 
     // Linker
-    .Linker                         = '$Clang8_BasePath$\bin\lld-link.exe'
+    .Linker                         = '$Clang11_BasePath$\bin\lld-link.exe'
     .LinkerOptions                  = '/NODEFAULTLIB /WX /NOLOGO /INCREMENTAL:NO /OUT:"%2" "%1" /DEBUG'
                                     + .VSLibPaths
 
