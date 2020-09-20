@@ -76,6 +76,9 @@ Compiler( 'Compiler-Clang10' )
                                     + ' -Wno-ignored-pragma-intrinsic'  // _bittest' is not a recognized builtin; consider including <intrin.h> to access non-builtin intrinsics [-Wignored-pragma-intrinsic]
                                     + ' -Wno-deprecated-declarations'   // '_vsnprintf_l' is deprecated : This function or variable may be unsafe.
 
+                                    // Disabled warnings that are not useful
+                                    + ' -Wno-invalid-offsetof'          // we get the offset of members in non-POD types
+
     .CompilerOptions                = ' -o"%2" "%1" $CommonCompilerOptions$'
     .CompilerOptionsC               = ' -x c -o"%2" "%1" $CommonCompilerOptions$'
     .PCHOptions                     = ' -x c++-header "%1" -o"%2" $CommonCompilerOptions$'
