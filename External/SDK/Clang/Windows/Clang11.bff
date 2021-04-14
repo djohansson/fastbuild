@@ -1,13 +1,8 @@
 // Clang 11.x.x
 //------------------------------------------------------------------------------
-#if exists(LLVM)
-#import LLVM
-.Clang11_BasePath = '$LLVM$'
-#else
-.Clang11_BasePath     = '$_CURRENT_BFF_DIR_$/11.0.0.RC2'
+.Clang11_BasePath     = '$_CURRENT_BFF_DIR_$/11.0.0'
 #if CI_BUILD
     .Clang11_BasePath = 'C:\Program Files\LLVM'
-#endif
 #endif
 
 // Compiler
@@ -20,6 +15,7 @@ Compiler( 'Compiler-Clang11' )
                                         '$Root$/bin/vcruntime140.dll'
                                       }
     .Executable                     = '$Root$\bin\clang++.exe'
+    //.Executable                     = '$Root$\bin\clang-cl.exe'
 
     // Allow tests to activate some experimental behavior
     #if ENABLE_RELATIVE_PATHS
