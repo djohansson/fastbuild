@@ -114,6 +114,8 @@ Compiler( 'Compiler-VS2019-x64' )
                                     + ' /wd5045' // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
                                     + ' /wd5220' // '%s': a non-static data member with a volatile qualified type no longer implies that compiler generated copy/move constructors and copy/move assignment operators are not trivial
                                     + ' /wd6101' // ws2tcpip.h(968) : warning C6101: Returning uninitialized memory '*Mtu'.  A successful path through the function does not set the named _Out_ parameter. : Lines: 968, 973, 974, 975, 976, 978, 979, 994, 968
+                                    + ' /wd26457'// Array.h(220) : warning C26457: (void) should not be used to ignore return values, use 'std::ignore =' instead (es.48).
+                                    + ' /wd26051'// lz4.c(1654) : warning C26051: Function with irreducible control flow graph.
 
                                     // Include Paths
                                     + ' /I"./"'
