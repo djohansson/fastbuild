@@ -1,8 +1,13 @@
 // Clang 11.x.x
 //------------------------------------------------------------------------------
+#if exists(LLVM)
+#import LLVM
+.Clang11_BasePath = '$LLVM$'
+#else
 .Clang11_BasePath     = '$_CURRENT_BFF_DIR_$/11.0.0'
 #if CI_BUILD
     .Clang11_BasePath = 'C:\Program Files\LLVM'
+#endif
 #endif
 
 // Compiler
