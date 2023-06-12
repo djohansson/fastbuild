@@ -33,7 +33,6 @@
         #endif
     #endif
 #endif
-#endif
 
 // Print details of used version. TODO:C Move to Clang.bff
 Print( 'Using Clang $Clang11_Version$ from $Clang11_BasePath$' )
