@@ -67,6 +67,8 @@ static const uint32_t g_CRC32Table[ 256 ] =
 
 UINT g_crc_slicing[8][256];
 
+PRAGMA_DISABLE_PUSH_CLANG_WINDOWS( "-Wsign-conversion" )
+
 void SlicingInit()
 {
     for (UINT i = 0; i <= 0xFF; i++) {
@@ -84,6 +86,8 @@ void SlicingInit()
         }
     }
 }
+
+PRAGMA_DISABLE_POP_CLANG_WINDOWS // -Wsign-conversion
 
 static RES CRC_SlicingBy8(const BYTE* buf, SIZE_T len)
 {
@@ -103,11 +107,13 @@ static RES CRC_SlicingBy8(const BYTE* buf, SIZE_T len)
     for (; align; align--)
         crc = g_crc_slicing[0][(crc ^ *buf++) & 0xFF] ^ (crc >> 8);
 
+    PRAGMA_DISABLE_PUSH_CLANG_WINDOWS( "-Wcast-align" )
+
     SIZE_T nqwords = len / (sizeof(uint32_t) + sizeof(uint32_t));
     for (; nqwords; nqwords--) {
-        crc ^= *(uint32_t*)buf;
+        crc ^= *(const uint32_t*)buf;
         buf += sizeof(uint32_t);
-        UINT next = *(uint32_t*)buf;
+        const UINT next = *(const uint32_t*)buf;
         buf += sizeof(uint32_t);
         crc =
             g_crc_slicing[7][(crc      ) & 0xFF] ^
@@ -120,6 +126,8 @@ static RES CRC_SlicingBy8(const BYTE* buf, SIZE_T len)
             g_crc_slicing[0][(next >> 24)];
     }
 
+    PRAGMA_DISABLE_POP_CLANG_WINDOWS // -Wcast-align
+
     len &= sizeof(uint32_t) * 2 - 1;
     for (; len; len--)
         crc = g_crc_slicing[0][(crc ^ *buf++) & 0xFF] ^ (crc >> 8);
@@ -130,7 +138,7 @@ static RES CRC_SlicingBy8(const BYTE* buf, SIZE_T len)
 //------------------------------------------------------------------------------
 /*static*/ uint32_t CRC32::Update( uint32_t crc32, const void * buffer, size_t len )
 {
-    const uint8_t * bytes = (uint8_t*)buffer;
+    const uint8_t * bytes = (const uint8_t*)buffer;
     for ( size_t i = 0; i < len; i++ )
     {
         crc32 = ( crc32 >> 8 ) ^ g_CRC32Table[ ( crc32 ^ bytes[ i ] ) & 0x000000FF ];
@@ -142,7 +150,7 @@ static RES CRC_SlicingBy8(const BYTE* buf, SIZE_T len)
 //------------------------------------------------------------------------------
 /*static*/ uint32_t CRC32::UpdateLower( uint32_t crc32, const void * buffer, size_t len )
 {
-    const uint8_t * bytes = (uint8_t*)buffer;
+    const uint8_t * bytes = (const uint8_t*)buffer;
     for ( size_t i = 0; i < len; i++ )
     {
         uint8_t b = bytes[ i ];
@@ -159,7 +167,7 @@ static RES CRC_SlicingBy8(const BYTE* buf, SIZE_T len)
 //------------------------------------------------------------------------------
 /*static*/ uint32_t CRC32::Calc( const void * buffer, size_t len )
 {
-    return CRC_SlicingBy8( (unsigned char *)buffer, len );
+    return CRC_SlicingBy8( (const unsigned char *)buffer, len );
 }
 
 // CalcLower

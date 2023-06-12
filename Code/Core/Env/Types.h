@@ -72,33 +72,20 @@ typedef signed int          int32_t;
 #endif
 
 #ifndef intptr_t
-    #if defined( WIN64 )
+    #if defined( __WINDOWS__ )
         typedef int64_t     intptr_t;
         typedef uint64_t    uintptr_t;
-    #elif defined( WIN32 )
-        typedef int32_t     intptr_t;
-        typedef uint32_t    uintptr_t;
     #endif
 #endif
 #ifndef uintptr_t
     #if defined( __LINUX__ )
-        #if defined( __X64__ ) || defined( __ARM64__ )
-            typedef uint64_t    uintptr_t;
-        #else
-            typedef uint32_t    uintptr_t;
-        #endif
+        typedef uint64_t    uintptr_t;
     #endif
 #endif
 #ifndef size_t
-    #if defined( WIN64 )
+    #if defined( __WINDOWS__ )
         typedef uint64_t    size_t;
-    #elif defined( WIN32 )
-        typedef uint32_t    size_t;
     #endif
-#endif
-
-#if defined( __WINDOWS__ ) && defined( __clang__ )
-    #define __w64
 #endif
 
 // Versions of Visual Studio prior to 2017 don't manage noexcept properly
@@ -112,19 +99,19 @@ typedef signed int          int32_t;
     typedef long long LONGLONG;
 #endif
 
-#if defined( __LINUX__ ) || defined( __APPLE__ )
-    #define MemoryBarrier() __asm__ __volatile__("")
-#endif
-
 #if defined( __GNUC__ ) || defined( __clang__ ) // GCC or Clang
     #define FORMAT_STRING( fmt, args ) __attribute__((format(printf, fmt, args)))
+    #define SCAN_STRING( fmt, args ) __attribute__((format(scanf, fmt, args)))
 #else
     #define FORMAT_STRING( fmt, args )
+    #define SCAN_STRING( fmt, args )
 #endif
+
+#define ARRAY_SIZE( array ) ( sizeof( array ) / sizeof( array[0] ) )
 
 // Warning disabling
 //------------------------------------------------------------------------------
-#if defined( WIN32 ) || defined( WIN64 )
+#if defined( __WINDOWS__ )
     #define PRAGMA_DISABLE_PUSH_MSVC( num ) __pragma(warning(push))         \
                                             __pragma(warning(disable:num))
     #define PRAGMA_DISABLE_POP_MSVC         __pragma(warning(pop))

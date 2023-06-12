@@ -142,17 +142,20 @@ void TestObjectList::ExtraOutputFolders_PathExtraction() const
     // - ../
     // - double //
     AStackString<> args( " /FdTools\\FBuild\\FBuildTest\\Data/../../../../../tmp/Test/ObjectList/ExtraOutputPaths/ObjectList//pdb/file.pdb"
-                         " /FaTools\\FBuild\\FBuildTest\\Data/../../../../../tmp/Test/ObjectList/ExtraOutputPaths/ObjectList//asm/file.asm" );
+                         " /FaTools\\FBuild\\FBuildTest\\Data/../../../../../tmp/Test/ObjectList/ExtraOutputPaths/ObjectList//asm/file.asm"
+                         " /sourceDependencies Tools\\FBuild\\FBuildTest\\Data/../../../../../tmp/Test/ObjectList/ExtraOutputPaths/ObjectList//srcDeps/file.json");
 
     // Getthe paths
-    AStackString<> pdbPath, asmPath;
-    FunctionObjectList::GetExtraOutputPaths( args, pdbPath, asmPath );
+    AStackString<> pdbPath, asmPath, sourceDependenciesPath;
+    FunctionObjectList::GetExtraOutputPaths( args, pdbPath, asmPath, sourceDependenciesPath );
 
     // Check that the entire span is correctly captured
     TEST_ASSERT( pdbPath.BeginsWith( "Tools" ) );
     TEST_ASSERT( pdbPath.EndsWith( "pdb" ) && !pdbPath.EndsWith( ".pdb" ) );
     TEST_ASSERT( asmPath.BeginsWith( "Tools" ) );
-    TEST_ASSERT( asmPath.EndsWith( "asm" ) && !pdbPath.EndsWith( ".asm" ) );
+    TEST_ASSERT( asmPath.EndsWith( "asm" ) && !asmPath.EndsWith( ".asm" ) );
+    TEST_ASSERT( sourceDependenciesPath.BeginsWith( "Tools" ) );
+    TEST_ASSERT( sourceDependenciesPath.EndsWith( "srcDeps" ) && !sourceDependenciesPath.EndsWith( ".json" ) );
 }
 
 // ObjectListChaining
@@ -180,7 +183,7 @@ void TestObjectList::ObjectListChaining() const
         // Check stats
         //               Seen,  Built,  Type
         CheckStatsNode(     2,      2,  Node::OBJECT_LIST_NODE );
-        CheckStatsNode(     2,      2,  Node::OBJECT_NODE );
+        CheckStatsNode(     4,      4,  Node::OBJECT_NODE );
         CheckStatsNode(     1,      1,  Node::DIRECTORY_LIST_NODE );
 
         fBuild.SerializeDepGraphToText( "ObjectList2", depGraphText1 );
@@ -195,7 +198,7 @@ void TestObjectList::ObjectListChaining() const
         // Check stats
         //               Seen,  Built,  Type
         CheckStatsNode(     2,      0,  Node::OBJECT_LIST_NODE );
-        CheckStatsNode(     2,      0,  Node::OBJECT_NODE );
+        CheckStatsNode(     4,      0,  Node::OBJECT_NODE );
         CheckStatsNode(     1,      1,  Node::DIRECTORY_LIST_NODE );
     }
 
@@ -210,7 +213,7 @@ void TestObjectList::ObjectListChaining() const
         // Check stats
         //               Seen,  Built,  Type
         CheckStatsNode(     2,      0,  Node::OBJECT_LIST_NODE );
-        CheckStatsNode(     2,      0,  Node::OBJECT_NODE );
+        CheckStatsNode(     4,      0,  Node::OBJECT_NODE );
         CheckStatsNode(     1,      1,  Node::DIRECTORY_LIST_NODE );
 
         fBuild.SerializeDepGraphToText( "ObjectList2", depGraphText2 );

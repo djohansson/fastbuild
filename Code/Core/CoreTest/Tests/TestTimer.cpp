@@ -3,7 +3,7 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "TestFramework/UnitTest.h"
+#include "TestFramework/TestGroup.h"
 
 // Core
 #include <Core/Process/Thread.h>
@@ -11,7 +11,7 @@
 
 // TestTimer
 //------------------------------------------------------------------------------
-class TestTimer : public UnitTest
+class TestTimer : public TestGroup
 {
 private:
     DECLARE_TESTS
@@ -32,7 +32,7 @@ void TestTimer::Validate() const
     Timer t;
     t.Start();
     const int64_t before = t.GetNow();
-    #if defined( __OSX__ ) && defined( __ARM64__ )
+    #if defined( __OSX__ ) && defined( __aarch64__ ) // ARM
         // TODO:B Figure out why sleep granularity is so poor on Apple Silicon
         Thread::Sleep( 100 ); // sleep for 100ms
     #else

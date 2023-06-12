@@ -3,7 +3,7 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "TestFramework/UnitTest.h"
+#include "TestFramework/TestGroup.h"
 
 #include "Core/Containers/Array.h"
 #include "Core/Math/Random.h"
@@ -18,7 +18,7 @@
 
 // TestSmallBlockAllocator
 //------------------------------------------------------------------------------
-class TestSmallBlockAllocator : public UnitTest
+class TestSmallBlockAllocator : public TestGroup
 {
 private:
     DECLARE_TESTS
@@ -30,7 +30,7 @@ private:
     class ThreadInfo
     {
     public:
-        Thread::ThreadHandle    m_ThreadHandle      = INVALID_THREAD_HANDLE;
+        Thread                  m_Thread;
         Array< uint32_t > *     m_AllocationSizes   = nullptr;
         uint32_t                m_RepeatCount       = 0;
         float                   m_TimeTaken         = 0.0f;
@@ -65,9 +65,9 @@ void TestSmallBlockAllocator::SingleThreaded() const
     Array< uint32_t > allocSizes( 0, true );
     GetRandomAllocSizes( numAllocs, allocSizes );
 
-    float time1 = AllocateFromSystemAllocator( allocSizes, repeatCount );
-    float time2 = AllocateFromSmallBlockAllocator( allocSizes, repeatCount );
-    float time3 = AllocateFromSmallBlockAllocator( allocSizes, repeatCount, false ); // Thread-safe = false
+    const float time1 = AllocateFromSystemAllocator( allocSizes, repeatCount );
+    const float time2 = AllocateFromSmallBlockAllocator( allocSizes, repeatCount );
+    const float time3 = AllocateFromSmallBlockAllocator( allocSizes, repeatCount, false ); // Thread-safe = false
 
     // output
     OUTPUT( "System (malloc)                            : %2.3fs - %u allocs @ %u allocs/sec\n", (double)time1, ( numAllocs * repeatCount ), (uint32_t)( float( numAllocs * repeatCount ) / time1 ) );
@@ -101,17 +101,13 @@ void TestSmallBlockAllocator::MultiThreaded() const
         {
             info[ i ].m_AllocationSizes = & allocSizes;
             info[ i ].m_RepeatCount = repeatCount;
-            info[ i ].m_ThreadHandle = Thread::CreateThread( ThreadFunction_System, "SmallBlock", ( 64 * KILOBYTE ), (void*)&info[ i ] );
-            TEST_ASSERT( info[ i ].m_ThreadHandle != INVALID_THREAD_HANDLE );
+            info[ i ].m_Thread.Start( ThreadFunction_System, "SmallBlock", (void*)&info[ i ] );
         }
 
         // Join the threads
         for ( size_t i = 0; i < numThreads; ++i )
         {
-            bool timedOut;
-            Thread::WaitForThread( info[ i ].m_ThreadHandle, 500 * 1000, timedOut );
-            Thread::CloseHandle( info[ i ].m_ThreadHandle );
-            TEST_ASSERT( timedOut == false );
+            info[ i ].m_Thread.Join();
             time1 += info[ i ].m_TimeTaken;
         }
     }
@@ -124,17 +120,13 @@ void TestSmallBlockAllocator::MultiThreaded() const
         {
             info[ i ].m_AllocationSizes = & allocSizes;
             info[ i ].m_RepeatCount = repeatCount;
-            info[ i ].m_ThreadHandle = Thread::CreateThread( ThreadFunction_SmallBlock, "SmallBlock", ( 64 * KILOBYTE ), (void*)&info[ i ] );
-            TEST_ASSERT( info[ i ].m_ThreadHandle != INVALID_THREAD_HANDLE );
+            info[ i ].m_Thread.Start( ThreadFunction_SmallBlock, "SmallBlock", (void*)&info[ i ] );
         }
 
         // Join the threads
         for ( size_t i = 0; i < numThreads; ++i )
         {
-            bool timedOut;
-            Thread::WaitForThread( info[ i ].m_ThreadHandle, 500 * 1000, timedOut );
-            Thread::CloseHandle( info[ i ].m_ThreadHandle );
-            TEST_ASSERT( timedOut == false );
+            info[ i ].m_Thread.Join();
             time2 += info[ i ].m_TimeTaken;
         }
         time2 /= numThreads;
@@ -169,14 +161,16 @@ void TestSmallBlockAllocator::MultiThreaded() const
     const size_t numAllocs = allocSizes.GetSize();
 
     Array< void * > allocs( numAllocs, false );
-    Timer timer;
+    const Timer timer;
 
     for ( size_t r = 0; r < repeatCount; ++r )
     {
         // use malloc
         for ( uint32_t i = 0; i < numAllocs; ++i )
         {
+            PRAGMA_DISABLE_PUSH_MSVC(26408) // Memory subsystem is allowed to call malloc
             uint32_t * mem = (uint32_t *)malloc( allocSizes[ i ] );
+            PRAGMA_DISABLE_POP_MSVC
             allocs.Append( mem );
         }
 
@@ -184,7 +178,9 @@ void TestSmallBlockAllocator::MultiThreaded() const
         for ( uint32_t i = 0; i < numAllocs; ++i )
         {
             void * mem = allocs[ i ];
+            PRAGMA_DISABLE_PUSH_MSVC(26408) // Memory subsystem is allowed to call free
             free( mem );
+            PRAGMA_DISABLE_POP_MSVC
         }
 
         allocs.Clear();
@@ -200,7 +196,7 @@ void TestSmallBlockAllocator::MultiThreaded() const
     const size_t numAllocs = allocSizes.GetSize();
 
     Array< void * > allocs( numAllocs, false );
-    Timer timer;
+    const Timer timer;
 
     if ( threadSafe == false )
     {
@@ -238,7 +234,7 @@ void TestSmallBlockAllocator::MultiThreaded() const
 //------------------------------------------------------------------------------
 /*static*/ uint32_t TestSmallBlockAllocator::ThreadFunction_System( void * userData )
 {
-    ThreadInfo & info = *( reinterpret_cast< ThreadInfo * >( userData ) );
+    ThreadInfo & info = *( static_cast< ThreadInfo * >( userData ) );
     info.m_TimeTaken = AllocateFromSystemAllocator( *info.m_AllocationSizes, info.m_RepeatCount );
     return 0;
 }
@@ -247,7 +243,7 @@ void TestSmallBlockAllocator::MultiThreaded() const
 //------------------------------------------------------------------------------
 /*static*/ uint32_t TestSmallBlockAllocator::ThreadFunction_SmallBlock( void * userData )
 {
-    ThreadInfo & info = *( reinterpret_cast< ThreadInfo * >( userData ) );
+    ThreadInfo & info = *( static_cast< ThreadInfo * >( userData ) );
     info.m_TimeTaken = AllocateFromSmallBlockAllocator( *info.m_AllocationSizes, info.m_RepeatCount );
     return 0;
 }

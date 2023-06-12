@@ -38,8 +38,9 @@ Compressor::~Compressor()
 
 // IsValidData
 //------------------------------------------------------------------------------
-bool Compressor::IsValidData( const void * data, size_t dataSize ) const
+/*static*/ bool Compressor::IsValidData( const void * data, size_t dataSize )
 {
+    ASSERT( data );
     const Header * header = (const Header *)data;
     if ( header->m_CompressionType > 1 )
     {
@@ -56,11 +57,23 @@ bool Compressor::IsValidData( const void * data, size_t dataSize ) const
     return true;
 }
 
+// GetUncompressedSize
+//------------------------------------------------------------------------------
+/*static*/ uint32_t Compressor::GetUncompressedSize( const void * data, size_t dataSize )
+{
+    // Only valid to call on data that is known to be compressor format
+    ASSERT( IsValidData( data, dataSize ) );
+    (void)dataSize;
+
+    const Header * header = (const Header *)data;
+    return header->m_UncompressedSize;
+}
+
 // Compress
 //------------------------------------------------------------------------------
 bool Compressor::Compress( const void * data, size_t dataSize, int32_t compressionLevel )
 {
-    PROFILE_FUNCTION
+    PROFILE_FUNCTION;
 
     ASSERT( data );
     ASSERT( m_Result == nullptr );
@@ -95,9 +108,9 @@ bool Compressor::Compress( const void * data, size_t dataSize, int32_t compressi
     if ( compressed )
     {
         // trim memory usage to compressed size
-        m_Result = ALLOC( compressedSize + sizeof( Header ) );
+        m_Result = ALLOC( (uint32_t)compressedSize + sizeof( Header ) );
         memcpy( (char *)m_Result + sizeof( Header ), output.Get(), (size_t)compressedSize );
-        m_ResultSize = compressedSize + sizeof( Header );
+        m_ResultSize = (uint32_t)compressedSize + sizeof( Header );
     }
     else
     {
@@ -111,7 +124,7 @@ bool Compressor::Compress( const void * data, size_t dataSize, int32_t compressi
     Header * header = (Header*)m_Result;
     header->m_CompressionType = compressed ? 1u : 0u;   // compression type
     header->m_UncompressedSize = (uint32_t)dataSize;    // input size
-    header->m_CompressedSize = compressed ? compressedSize : (uint32_t)dataSize;    // output size
+    header->m_CompressedSize = compressed ? (uint32_t)compressedSize : (uint32_t)dataSize;    // output size
 
     return compressed;
 }
@@ -120,7 +133,7 @@ bool Compressor::Compress( const void * data, size_t dataSize, int32_t compressi
 //------------------------------------------------------------------------------
 bool Compressor::Decompress( const void * data )
 {
-    PROFILE_FUNCTION
+    PROFILE_FUNCTION;
 
     ASSERT( data );
     ASSERT( m_Result == nullptr );
@@ -131,7 +144,7 @@ bool Compressor::Decompress( const void * data )
     if ( header->m_CompressionType == 0 )
     {
         m_Result = ALLOC( header->m_UncompressedSize );
-        memcpy( m_Result, (char *)data + sizeof( Header ), header->m_UncompressedSize );
+        memcpy( m_Result, (const char *)data + sizeof( Header ), header->m_UncompressedSize );
         m_ResultSize = header->m_UncompressedSize;
         return true;
     }

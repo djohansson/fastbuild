@@ -17,6 +17,7 @@
 #include "Core/Process/Process.h"
 #include "Core/Process/SystemMutex.h"
 #include "Core/Process/Thread.h"
+#include "Core/Profile/Profile.h"
 #include "Core/Strings/AStackString.h"
 
 // system
@@ -31,7 +32,7 @@ SystemMutex g_OneProcessMutex( "Global\\FBuildWorker" );
 
 // Functions
 //------------------------------------------------------------------------------
-int MainCommon( const AString & args );
+int Main( const AString & args );
 #if defined( __WINDOWS__ )
     int LaunchSubProcess( const AString & args );
 #endif
@@ -45,7 +46,9 @@ int MainCommon( const AString & args );
                         int /*nCmdShow*/ )
     {
         AStackString<> args( lpCmdLine );
-        return MainCommon( args );
+        const int32_t result = Main( args );
+        PROFILE_SYNCHRONIZE
+        return result;
     }
     PRAGMA_DISABLE_POP_MSVC
 #else
@@ -60,16 +63,20 @@ int MainCommon( const AString & args );
             }
             args += argv[ i ];
         }
-        return MainCommon( args );
+        const int32_t result = Main( args );
+        PROFILE_SYNCHRONIZE
+        return result;
     }
 #endif
 
 #include <stdio.h>
 
-// MainCommon
+// Main
 //------------------------------------------------------------------------------
-int MainCommon( const AString & args )
+int Main( const AString & args )
 {
+    PROFILE_FUNCTION;
+
     // don't buffer output
     VERIFY( setvbuf( stdout, nullptr, _IONBF, 0 ) == 0 );
     VERIFY( setvbuf( stderr, nullptr, _IONBF, 0 ) == 0 );
@@ -82,7 +89,7 @@ int MainCommon( const AString & args )
     }
 
     // only allow 1 worker per system
-    Timer t;
+    const Timer t;
     while ( g_OneProcessMutex.TryLock() == false )
     {
         // retry for upto 2 seconds, to allow some time for old worker to close
@@ -119,7 +126,7 @@ int MainCommon( const AString & args )
     // start the worker and wait for it to be closed
     int ret;
     {
-        Worker worker( args, options.m_ConsoleMode );
+        Worker worker( args, options.m_ConsoleMode, options.m_PeriodicRestart );
         if ( options.m_OverrideCPUAllocation )
         {
             WorkerSettings::Get().SetNumCPUsToUse( options.m_CPUAllocation );
@@ -148,7 +155,7 @@ int MainCommon( const AString & args )
         Env::GetExePath( exeName );
         AStackString<> exeNameCopy( exeName );
         exeNameCopy += ".copy";
-        Timer t;
+        const Timer t;
         while ( FileIO::FileCopy( exeName.Get(), exeNameCopy.Get() ) == false )
         {
             if ( t.GetElapsed() > 5.0f )
@@ -171,7 +178,7 @@ int MainCommon( const AString & args )
         #if defined( __WINDOWS__ )
             p.DisableHandleRedirection(); // TODO:MAC TODO:LINUX is this needed?
         #endif
-        p.Spawn( exeNameCopy.Get(), argsCopy.Get(), nullptr, nullptr );
+        (void)p.Spawn( exeNameCopy.Get(), argsCopy.Get(), nullptr, nullptr );
         p.Detach();
 
         return 0;

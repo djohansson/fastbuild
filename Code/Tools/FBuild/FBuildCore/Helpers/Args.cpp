@@ -152,7 +152,7 @@ bool Args::Finalize( const AString & exe, const AString & nodeNameForError, Args
         if ( argLen >= 131071 ) // From LNK1170
         {
             // Change spaces to carriage returns
-            for ( uint32_t i : m_DelimiterIndices )
+            for ( const uint32_t i : m_DelimiterIndices )
             {
                 ASSERT( m_Args[ i ] == ' ' );
                 m_Args[ i ] = '\n';
@@ -163,7 +163,7 @@ bool Args::Finalize( const AString & exe, const AString & nodeNameForError, Args
     // Write args to response file
     if ( m_DisableResponseFileWrite == false ) // Used by tests
     {
-        PROFILE_SECTION( "CreateResponseFile" )
+        PROFILE_SECTION( "CreateResponseFile" );
         if ( m_ResponseFile.Create( *this ) == false )
         {
             return false; // Create will have emitted an error
@@ -171,7 +171,7 @@ bool Args::Finalize( const AString & exe, const AString & nodeNameForError, Args
     }
 
     // Create new args referencing response file
-    m_ResponseFileArgs = "@\"";
+    m_ResponseFileArgs = "\"@";
     m_ResponseFileArgs += m_ResponseFile.GetResponseFilePath();
     m_ResponseFileArgs += "\"";
 

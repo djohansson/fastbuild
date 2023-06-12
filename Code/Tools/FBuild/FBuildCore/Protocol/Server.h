@@ -5,6 +5,7 @@
 // Includes
 //------------------------------------------------------------------------------
 #include "Core/Network/TCPConnectionPool.h"
+#include "Core/Process/Atomic.h"
 #include "Core/Time/Timer.h"
 
 // Forward Declarations
@@ -29,7 +30,7 @@ class Server : public TCPConnectionPool
 {
 public:
     Server( uint32_t numThreadsInJobQueue = 0 );
-    ~Server();
+    virtual ~Server() override;
 
     static void GetHostForJob( const Job * job, AString & hostName );
 
@@ -61,18 +62,22 @@ private:
 
     struct ClientState
     {
-        explicit ClientState( const ConnectionInfo * ci ) : m_CurrentMessage( nullptr ), m_Connection( ci ), m_NumJobsAvailable( 0 ), m_NumJobsRequested( 0 ), m_NumJobsActive( 0 ), m_WaitingJobs( 16, true ) {}
+        explicit ClientState( const ConnectionInfo * ci )
+            : m_Connection( ci )
+            , m_WaitingJobs( 16, true )
+        {}
 
-        inline bool operator < ( const ClientState & other ) const { return ( m_NumJobsAvailable > other.m_NumJobsAvailable ); }
+        inline bool operator < ( const ClientState & other ) const { return ( m_NumJobsAvailable.Load() > other.m_NumJobsAvailable.Load() ); }
 
         Mutex                   m_Mutex;
 
-        const Protocol::IMessage * m_CurrentMessage;
-        const ConnectionInfo *  m_Connection;
-        uint32_t                m_NumJobsAvailable;
-        uint32_t                m_NumJobsRequested;
-        uint32_t                m_NumJobsActive;
+        const Protocol::IMessage * m_CurrentMessage = nullptr;
+        const ConnectionInfo *  m_Connection = nullptr;
+        Atomic<uint32_t>        m_NumJobsAvailable;
+        Atomic<uint32_t>        m_NumJobsRequested;
+        Atomic<uint32_t>        m_NumJobsActive;
 
+        uint8_t                 m_ProtocolVersionMinor = 0;
         AString                 m_HostName;
 
         Array< Job * >          m_WaitingJobs; // jobs waiting for manifests/toolchains
@@ -82,15 +87,15 @@ private:
 
     JobQueueRemote *        m_JobQueueRemote;
 
-    volatile bool           m_ShouldExit;   // signal from main thread
-    Thread::ThreadHandle    m_Thread;       // the thread to manage workload
+    Atomic<bool>            m_ShouldExit;   // signal from main thread
+    Thread                  m_Thread;       // the thread to manage workload
     Mutex                   m_ClientListMutex;
     Array< ClientState * >  m_ClientList;
 
     mutable Mutex           m_ToolManifestsMutex;
     Array< ToolManifest * > m_Tools;
     
-    #if defined( __OSX__ ) || ( __LINUX__ )
+    #if defined( __OSX__ ) || defined( __LINUX__ )
         Timer                   m_TouchToolchainTimer;
     #endif
 };

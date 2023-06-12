@@ -5,6 +5,7 @@
 //------------------------------------------------------------------------------
 #include "Tools/FBuild/FBuildCore/FBuild.h"
 #include "Tools/FBuild/FBuildCore/FLog.h"
+#include "Tools/FBuild/FBuildCore/Helpers/BuildProfiler.h"
 #include "Tools/FBuild/FBuildCore/Helpers/CtrlCHandler.h"
 
 #include "Core/Process/Process.h"
@@ -34,6 +35,7 @@ enum ReturnCodes
     FBUILD_FAILED_TO_SPAWN_WRAPPER_FINAL    = -6,
     FBUILD_WRAPPER_CRASHED                  = -7,
     FBUILD_FAILED_TO_WSL_WRAPPER            = -8,
+    FBUILD_FAILED_TO_WRITE_PROFILE_JSON     = -9,
 };
 
 // Headers
@@ -61,7 +63,7 @@ SharedMemory g_SharedMemory;
 int main( int argc, char * argv[] )
 {
     // This wrapper is purely for profiling scope
-    int result = Main( argc, argv );
+    const int result = Main( argc, argv );
     PROFILE_SYNCHRONIZE // make sure no tags are active and do one final sync
     return result;
 }
@@ -70,9 +72,9 @@ int main( int argc, char * argv[] )
 //------------------------------------------------------------------------------
 int Main( int argc, char * argv[] )
 {
-    PROFILE_FUNCTION
+    PROFILE_FUNCTION;
 
-    Timer t;
+    const Timer t;
 
     // Register Ctrl-C Handler
     CtrlCHandler ctrlCHandler;
@@ -196,6 +198,10 @@ int Main( int argc, char * argv[] )
     {
         result = fBuild.DisplayDependencyDB( options.m_Targets );
     }
+    else if ( options.m_GenerateDotGraph )
+    {
+        result = fBuild.GenerateDotGraph( options.m_Targets, options.m_GenerateDotGraphFull );
+    }
     else if ( options.m_GenerateCompilationDatabase )
     {
         result = fBuild.GenerateCompilationDatabase( options.m_Targets );
@@ -213,6 +219,17 @@ int Main( int argc, char * argv[] )
         result = fBuild.Build( options.m_Targets );
     }
 
+
+    // Build Profiling enabled?
+    bool problemSavingBuildProfileJSON = false;
+    if ( options.m_Profile )
+    {
+        if ( BuildProfiler::Get().SaveJSON( options, "fbuild_profile.json" ) == false )
+        {
+            problemSavingBuildProfileJSON = true;
+        }
+    }
+
     if ( sharedData )
     {
         sharedData->ReturnCode = ( result == true ) ? FBUILD_OK : FBUILD_BUILD_FAILED;
@@ -221,7 +238,7 @@ int Main( int argc, char * argv[] )
     // final line of output - status of build
     if ( options.m_ShowTotalTimeTaken )
     {
-        float totalBuildTime = t.GetElapsed();
+        const float totalBuildTime = t.GetElapsed();
         const uint32_t minutes = uint32_t( totalBuildTime / 60.0f );
         const float seconds = ( totalBuildTime - (float)( minutes * 60 ) );
         if ( minutes > 0 )
@@ -235,6 +252,11 @@ int Main( int argc, char * argv[] )
     }
 
     ctrlCHandler.DeregisterHandler(); // Ensure this happens before FBuild is destroyed
+
+    if ( problemSavingBuildProfileJSON )
+    {
+        return FBUILD_FAILED_TO_WRITE_PROFILE_JSON;
+    }    
     return ( result == true ) ? FBUILD_OK : FBUILD_BUILD_FAILED;
 }
 

@@ -80,12 +80,16 @@
     <td>Enable distributed compilation.</td>
   </tr>
   <tr>
+    <td><a href="#distcompressionlevel">-distcompressionlevel [level]</a></td>
+    <td>Control compression level of jobs sent out for distribution. (Default -1)</td>
+  </tr>
+  <tr>
     <td><a href="#distverbose">-distverbose</a></td>
     <td>Enable detailed logging for distributed compilation.</td>
   </tr>
   <tr>
-    <td><a href="#fastcancel">-fastcancel</a></td>
-    <td>[Experimental] Active fast cancellation on build failure.</td>
+    <td><a href="#dot">-dot[full]</a></td>
+    <td>Generate an fbuild.gv DOT file for known dependencies.</td>
   </tr>
   <tr>
     <td><a href="#fixuperrorpaths">-fixuperrorpaths</a></td>
@@ -112,6 +116,10 @@
     <td>Output a machine readable file for use by 3rd party tools.</td>
   </tr>
   <tr>
+    <td><a href="#nofastcancel">-nofastcancel</a></td>
+    <td>Disable aborting other tasks as soon any task fails.</td>
+  </tr>
+  <tr>
     <td><a href="#nolocalrace">-nolocalrace</a></td>
     <td>Disable local race of remotely started jobs.</td>
   </tr>
@@ -129,7 +137,11 @@
   </tr>
   <tr>
     <td><a href="#nounity">-nounity</a></td>
-    <td>[Experimental] Individually build all files normally built in Unity.</td>
+    <td>Individually build all files normally built in Unity.</td>
+  </tr>
+  <tr>
+    <td><a href="#profile">-profile</a></td>
+    <td>Output a Chrome tracing format fbuild_profile.json describing the build.</td>
   </tr>
   <tr>
     <td><a href="#progress">-progress</a></td>
@@ -140,8 +152,8 @@
     <td>Don't show build output.</td>
   </tr>
   <tr>
-    <td><a href="#report">-report</a></td>
-    <td>Output a report at build termination.</td>
+    <td><a href="#report">-report=[html|json]</a></td>
+    <td>Output a report at build termination. (Default html)</td>
   </tr>
   <tr>
     <td><a href="#showcmdoutput">-showcmdoutput</a></td>
@@ -230,6 +242,10 @@
   <tr>
     <td><a href="#nosubprocess">-nosubprocess</a></td>
     <td>Don't spawn as a sub-process.</td>
+  </tr>
+  <tr>
+    <td><a href="#periodicrestart">-periodicrestart</a></td>
+    <td>Restart worker every 4 hours.</td>
   </tr>
 </table>
 </div>
@@ -337,6 +353,46 @@ be reproduced in the debugger.</p>
     <div class='newsitemheader' id="dist">-dist</div>
     <div class='newsitembody'>
 <p>Enable distributed compilation. Requires some build configuration.</p>
+
+    <div class='newsitemheader' id="distcompressionlevel">-distcompressionlevel [level]</div>
+    <div class='newsitembody'>
+<p>Control compression level of jobs sent out for distribution. (Default -1)</p>
+<p>This can be used to increase the level of compression for jobs sent out for distribution, trading increased CPU time
+        in order to reduce network transfer. This can be useful in network bandwidth limited environments. Note that
+        this value does not affect the compression level of the responses sent back from workers.</p>
+<table>
+    <tr><th width=150>Level</th><th>Description</th></tr>
+    <tr><td>-128 to -1</td><td>LZ4 compression. Lower values are faster but compress less. Default is -1.</td></tr>
+    <tr><td>0</td><td>Compression is disabled.</td>
+    <tr><td>1 to 12</td><td>LZ4 HC compression. Higher values compress more, but are slower.</td></tr>
+</table>
+<p>Timings will vary depending on hardware and source code being preprocessed, but example timings compressing a
+~1.8MiB flattened source file are as follows:
+    <div class="code">
+File : Tools/FBuild/FBuildTest/Data/TestCompressor/TestPreprocessedFile.ii
+Size : 1802697
+
+        Compression             Decompression
+Level | Time (ms)  MB/s  Ratio | Time (ms)  MB/s
+------------------------------------------------
+0     |    0.289  5943.6  1.00 |    0.283  6066.8
+-256  |    0.992  1733.7  1.25 |    0.291  5912.9
+-128  |    1.059  1622.8  1.44 |    0.345  4977.0
+-64   |    0.955  1799.8  1.86 |    0.448  3837.0
+-32   |    1.179  1457.7  2.53 |    0.508  3384.4
+-16   |    1.348  1274.9  3.37 |    0.553  3106.3
+-8    |    1.442  1192.3  4.05 |    0.542  3169.7
+-4    |    1.517  1132.9  4.53 |    0.537  3198.9
+-2    |    1.559  1102.6  4.80 |    0.620  2772.5
+<b>-1    |    1.612  1066.7  4.94 |    0.557  3085.1  &lt;--- Default</b>
+1     |    5.791   296.9  6.27 |    0.509  3380.1
+3     |    6.875   250.1  6.44 |    0.496  3468.7
+6     |   13.767   124.9  6.67 |    0.613  2804.2
+9     |   34.530    49.8  6.72 |    0.503  3419.4
+12    |  122.061    14.1  6.82 |    0.512  3360.6
+------------------------------------------------
+    </div>
+</p>
 </div>
 
     <div class='newsitemheader' id="distverbose">-distverbose</div>
@@ -344,11 +400,18 @@ be reproduced in the debugger.</p>
 <p>Print detailed information about distributed compilation. This can help when investigating connectivity issues. Activates -dist if not already specified.</p>
 </div>
 
-    <div class='newsitemheader' id="fastcancel">-fastcancel</div>
+    <div class='newsitemheader' id="dot">-dot[full]</div>
     <div class='newsitembody'>
-<p><b>[Experimental]</b> Activate fast cancellation on build failure.</p>
-<p>Normally, when a build fails, FASTBuild will stop spawning new tasks, but will allow any other concurrently running processes to complete. In some cases, these tasks can
-take a long time to complete. When activated, the -fastcancel option will allow FASTBuild to instead terminate those concurrent jobs.</p>
+<p>Generate an fbuild.gv DOT file for known dependencies which can be visualized in various third party tools
+such as <a href="https://graphviz.org/">Graphviz</a>.</p>
+<p>Example:</p>
+<div class='code'>fbuild.exe -dot Game-x86-Debug</div>
+<p>If no target is specified, "all" is used.</p>
+<p>By default, all leaf FileNodes (typically source files) are pruned from the graph. A full graph can be emitted
+by using <b>-dotfull</b>.</p>
+<p><b>NOTE:</b> The dependencies shown will reflect the state as of the last completed build.
+i.e. dependencies that would be discovered during the next build will not be shown.</p>
+<p><b>NOTE:</b> Large graphs may not be handled well by some visualizers.</p>
 </div>
 
     <div class='newsitemheader' id="fixuperrorpaths">-fixuperrorpaths</div>
@@ -416,6 +479,14 @@ of FASTBuild to distribute work efficiently.</p>
 can be monitored by 3rd party applications to provide enhanced visualization of the build state.</p>
 </div>
 
+              <div class='newsitemheader' id="nofastcancel">-nofastcancel</div>
+    <div class='newsitembody'>
+<p>Disable aborting other tasks as soon any task fails.</p>
+<p>Normally, when a task fails, any tasks running on other threads are aborted (external processes are terminated), allowing
+builds with errors to fail quickly. If this behavior is undesirable, it can be disabled with -nofastcancel. If "fastcancel" is
+disabled, any already started tasks will be allowed to complete.</p>
+</div>
+
               <div class='newsitemheader' id="nolocalrace">-nolocalrace</div>
     <div class='newsitembody'>
 <p>Disable local race of remotely started jobs. This can be useful for debugging.</p>
@@ -446,9 +517,16 @@ useful if you want to see as many errors as possible in your compilation output.
 
     <div class='newsitemheader' id="nounity">-nounity</div>
     <div class='newsitembody'>
-<p><b>[Experimental]</b> Individually build all files normally in Unity.</p>
-<p>NOTE: When alternating between specifying -nounity and not, libraries may not relink when they should. The resulting
-executables are valid, but may contain the previous unity objects instead of the loose objects</p>
+<p>Individually build all files normally in Unity.</p>
+<p>All files specified in Unity will instead be built as if specified individually outside of Unity.</p>
+</div>
+
+    <div class='newsitemheader' id="profile">-profile</div>
+    <div class='newsitembody'>
+<p>Output a Chrome tracing format fbuild_profile.json describing the build.</p>
+<p>When "build profiling" is activing, scheduling information for items (local and remote) is recorded to an fbuild_profile.json file.
+This file is written at the very end of the build, and can be viewed in Chrome's profiling viewer (chrome://tracing).</p>
+<p>NOTE: This may have a small impact on build performance.</p>
 </div>
 
     <div class='newsitemheader' id="progress">-progress</div>
@@ -465,9 +543,9 @@ using -progress.</p>
 suppressed.</p>
 </div>
 
-    <div class='newsitemheader' id="report">-report</div>
+    <div class='newsitemheader' id="report">-report=[html|json]</div>
     <div class='newsitembody'>
-<p>Output a detailed report at the end of the build.  The report is written to report.html in the current directory.</p>
+<p>Output a detailed report at the end of the build.  The report is written to a report.html or report.json file (default html if no option given) in the current directory.</p>
 <p>The build report contains details of:
 <ul>
   <li>The build environment (version, cmd line used etc.)</li>
@@ -504,7 +582,7 @@ to see the complete output.</p>
 <p>Example:</p>
 <div class='code'>fbuild.exe -showdeps Game-x86-Debug</div>
 <p>If no target is specified, "all" is used.</p>
-<p><b>NOTE:</b> The dependencies  shown will refelect the state as of the last completed build.
+<p><b>NOTE:</b> The dependencies shown will reflect the state as of the last completed build.
 i.e. dependencies that would be discovered during the next build will not be shown.</p>
 <p></p>
 </div>
@@ -644,7 +722,14 @@ than this amount it will not accept work.</p>
 <p>The "-nosubprocess" option suppresses this behaviour.</p>
 </div>
 
+    <div class='newsitemheader' id="periodicrestart">-periodicrestart</div>
+    <div class='newsitembody'>
+<p>Restart worker every 4 hours.</p>
+<p>If worker reliability issues are encountered, perhaps due to uncontrolable factors such as OS instability, network driver issues or as yet unresolved FASTBuild bugs, the worker can be instructed to periodically restart itself as a potential workaround.</p>
+</div>
 
-    </div><div class='footer'>&copy; 2012-2020 Franta Fulin</div></div></div>
+
+
+    </div><div class='footer'>&copy; 2012-2023 Franta Fulin</div></div></div>
 </body>
 </html>

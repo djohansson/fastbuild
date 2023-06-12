@@ -16,7 +16,6 @@
 #include "Core/Tracing/Tracing.h"
 
 // system
-#include <stdio.h> // for sscanf
 #if defined( __WINDOWS__ )
     #include "Core/Env/WindowsHeader.h" // for QueryDosDeviceA
 #endif
@@ -93,17 +92,19 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
         {
             m_Args += ' ';
         }
-        m_Args += thisArg;
 
         // Don't validate args for WSL forwarding
         if ( m_WrapperMode == WRAPPER_MODE_WINDOWS_SUBSYSTEM_FOR_LINUX )
         {
+            m_Args += thisArg;
             continue;
         }
 
         // options start with a '-'
         if ( thisArg.BeginsWith( '-' ) )
         {
+            m_Args += thisArg;
+
             if ( thisArg == "-continueafterdbmove" )
             {
                 m_ContinueAfterDBMove = true;
@@ -133,10 +134,8 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
             else if ( thisArg == "-cachetrim" )
             {
                 const int sizeIndex = ( i + 1 );
-                PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
                 if ( ( sizeIndex >= argc ) ||
-                     ( sscanf( argv[ sizeIndex ], "%u", &m_CacheTrim ) ) != 1 ) // TODO:C Consider using sscanf_s
-                PRAGMA_DISABLE_POP_MSVC // 4996
+                     ( AString::ScanS( argv[ sizeIndex ], "%u", &m_CacheTrim ) ) != 1 )
                 {
                     OUTPUT( "FBuild: Error: Missing or bad <sizeMiB> for '-cachetrim' argument\n" );
                     OUTPUT( "Try \"%s -help\"\n", programName.Get() );
@@ -157,18 +156,38 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
             else if ( thisArg == "-cachecompressionlevel" )
             {
                 const int sizeIndex = ( i + 1 );
-                PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
+                int32_t cacheCompressionLevel;
                 if ( ( sizeIndex >= argc ) ||
-                     ( sscanf( argv[ sizeIndex ], "%i", &m_CacheCompressionLevel ) != 1 ) || // TODO:C Consider using sscanf_s
-                     ( ( m_CacheCompressionLevel < -128 ) || ( m_CacheCompressionLevel > 12 ) ) ) // See Compressor for valid ranges
-                PRAGMA_DISABLE_POP_MSVC // 4996
+                     ( AString::ScanS( argv[ sizeIndex ], "%i", &cacheCompressionLevel ) != 1 ) ||
+                     ( ( cacheCompressionLevel < -128 ) || ( cacheCompressionLevel > 12 ) ) ) // See Compressor for valid ranges
                 {
                     OUTPUT( "FBuild: Error: Missing or bad <level> for '-cachecompressionlevel' argument\n" );
                     OUTPUT( "Try \"%s -help\"\n", programName.Get() );
                     return OPTIONS_ERROR;
                 }
+                m_CacheCompressionLevel = static_cast< int16_t >( cacheCompressionLevel );
                 i++; // skip extra arg we've consumed
                 
+                // add to args we might pass to subprocess
+                m_Args += ' ';
+                m_Args += argv[ sizeIndex ];
+                continue;
+            }
+            else if ( thisArg == "-distcompressionlevel" )
+            {
+                const int sizeIndex = ( i + 1 );
+                int32_t distLevel;
+                if ( ( sizeIndex >= argc ) ||
+                     ( AString::ScanS( argv[sizeIndex], "%i", &distLevel ) != 1 ) ||
+                     ( ( distLevel < -128 ) || ( distLevel > 12 ) ) ) // See Compressor for valid ranges
+                {
+                    OUTPUT( "FBuild: Error: Missing or bad <level> for '-distcompressionlevel' argument\n" );
+                    OUTPUT( "Try \"%s -help\"\n", programName.Get() );
+                    return OPTIONS_ERROR;
+                }
+                m_DistributionCompressionLevel = static_cast<int16_t>( distLevel );
+                i++; // skip extra arg we've consumed
+
                 // add to args we might pass to subprocess
                 m_Args += ' ';
                 m_Args += argv[ sizeIndex ];
@@ -222,9 +241,22 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
                 m_ShowBuildReason = true;
                 continue;
             }
+            else if ( thisArg == "-dot" )
+            {
+                m_GenerateDotGraph = true;
+                m_GenerateDotGraphFull = false;
+                continue;
+            }
+            else if ( thisArg == "-dotfull" )
+            {
+                m_GenerateDotGraph = true;
+                m_GenerateDotGraphFull = true;
+                continue;
+            }
             else if ( thisArg == "-fastcancel" )
             {
-                m_FastCancel = true;
+                // This is on by default now
+                OUTPUT( "FBuild: Warning: -fastcancel is deprecated. (\"fastcancel\" is on by default)\n" );
                 continue;
             }
             else if ( thisArg == "-fixuperrorpaths" )
@@ -254,10 +286,8 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
                 #endif
                 continue;
             }
-            PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
             else if ( thisArg.BeginsWith( "-j" ) &&
-                      sscanf( thisArg.Get(), "-j%u", &m_NumWorkerThreads ) == 1 ) // TODO:C Consider using sscanf_s
-            PRAGMA_DISABLE_POP_MSVC // 4996
+                      ( thisArg.Scan( "-j%u", &m_NumWorkerThreads ) == 1 ) )
             {
                 // only accept within sensible range
                 if ( m_NumWorkerThreads <= 256 )
@@ -270,15 +300,14 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
                 m_EnableMonitor = true;
                 continue;
             }
+            else if ( thisArg == "-nofastcancel" )
+            {
+                m_FastCancel = false;
+                continue;
+            }
             else if (thisArg == "-nolocalrace")
             {
                 m_AllowLocalRace = false;
-                continue;
-            }
-            else if ( thisArg == "-nooutputbuffering" )
-            {
-                // this doesn't do anything any more
-                OUTPUT( "FBuild: Warning: -nooutputbuffering is deprecated.\n" );
                 continue;
             }
             else if ( thisArg == "-noprogress" )
@@ -303,6 +332,11 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
                 m_NoUnity = true;
                 continue;
             }
+            else if ( thisArg == "-profile" )
+            {
+                m_Profile = true;
+                continue;
+            }
             else if ( thisArg == "-progress" )
             {
                 m_ShowProgress = true;
@@ -316,9 +350,27 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
                 m_ShowVerbose = false;
                 continue;
             }
-            else if ( thisArg == "-report" )
+            else if ( thisArg.BeginsWith( "-report" ) )
             {
-                m_GenerateReport = true;
+                StackArray<AString> reportTokens;
+                thisArg.Tokenize( reportTokens, '=' );
+
+                // if there is something after the '=' sign, then we take whatever comes after as the report type
+                if ( reportTokens.GetSize() > 1 ) 
+                {
+                    m_ReportType = reportTokens[ 1 ];
+                    m_ReportType.ToLower();
+                    if ( ( m_ReportType != "html" ) && ( m_ReportType != "json" ) )
+                    {
+                        OUTPUT( "FBuild: Error: Invalid report type '%s' for '-report'\n", m_ReportType.Get() );
+                        OUTPUT( "Try \"%s -help\"\n", programName.Get() );
+                        return OPTIONS_ERROR;
+                    }
+                }
+                else
+                {
+                    m_ReportType = "html"; // default report type if nothing specified
+                }
                 continue;
             }
             else if ( thisArg == "-showcmds" )
@@ -401,6 +453,10 @@ FBuildOptions::OptionsResult FBuildOptions::ProcessCommandLine( int argc, char *
         }
         else
         {
+            m_Args += '"'; // surround with quotes to avoid problems with spaces in target name
+            m_Args += thisArg;
+            m_Args += '"';
+
             // assume target
             m_Targets.Append( thisArg );
         }
@@ -475,14 +531,16 @@ void FBuildOptions::SetWorkingDir( const AString & path )
     }
 
     #if defined( __WINDOWS__ )
-        // so C:\ and c:\ are treated the same on Windows, for better cache hits
-        // make the drive letter always uppercase
-        if ( ( m_WorkingDir.GetLength() >= 2 ) &&
-             ( m_WorkingDir[ 1 ] == ':' ) &&
-             ( m_WorkingDir[ 0 ] >= 'a' ) &&
-             ( m_WorkingDir[ 0 ] <= 'z' ) )
+        // Canonicalize the working dir so that drive letters
+        // and directory names have correct/consistent paths.
+        // This ensures things that are sensitive to path casing
+        // work as expected:
+        // a) Compilers with path portability warnings (Clang)
+        // b) Caching
+        AStackString<> normalizedWorkingDir;
+        if ( FileIO::NormalizeWindowsPathCasing( m_WorkingDir, normalizedWorkingDir ) )
         {
-            m_WorkingDir[ 0 ] = ( 'A' + ( m_WorkingDir[ 0 ] - 'a' ) );
+            m_WorkingDir = normalizedWorkingDir;
         }
     #endif
 
@@ -569,7 +627,13 @@ void FBuildOptions::DisplayHelp( const AString & programName ) const
             " -debug            (Windows) Break at startup, to attach debugger.\n"
             " -dist             Allow distributed compilation.\n"
             " -distverbose      Print detailed info for distributed compilation.\n"
-            " -fastcancel       (Experimental) Fast cancellation on build failure.\n"
+            " -distcompressionlevel\n"
+            "                   Control distributed compilation compression (default: -1)\n"
+            "                   - <= -1 : less compression, with -128 being the lowest\n"
+            "                   - ==  0 : disable compression\n"
+            "                   - >=  1 : more compression, with 12 being the highest\n"
+            " -dot[full]        Emit known dependency tree info for specified targets to an\n"
+            "                   fbuild.gv file in DOT format.\n"
             " -fixuperrorpaths  Reformat error paths to be Visual Studio friendly.\n"
             " -forceremote      Force distributable jobs to only be built remotely.\n"
             " -help             Show this help.\n"
@@ -579,14 +643,19 @@ void FBuildOptions::DisplayHelp( const AString & programName ) const
             " -j<x>             Explicitly set LOCAL worker thread count X, instead of\n"
             "                   default of hardware thread count.\n"
             " -monitor          Emit a machine-readable file while building.\n"
+            " -nofastcancel     Disable aborting other tasks as soon any task fails.\n"
             " -nolocalrace      Disable local race of remotely started jobs.\n"
             " -noprogress       Don't show the progress bar while building.\n"
             " -nounity          (Experimental) Build files individually, ignoring Unity.\n"
             " -nostoponerror    On error, favor building as much as possible.\n"
             " -nosummaryonerror Hide the summary if the build fails. Implies -summary.\n"
+            " -profile          Output an fbuild_profiling.json describing the build.\n"
             " -progress         Show build progress bar even if stdout is redirected.\n"
             " -quiet            Don't show build output.\n"
-            " -report           Ouput report.html at build end. (Increases build time)\n"
+            " -report[=json|html]\n"
+            "                   Ouput report at build end. (Increases build time)\n"
+            "                   - =html : outputs a report.html file (default)\n"
+            "                   - =json : outputs a report.json file\n"
             " -showcmds         Show command lines used to launch external processes.\n"
             " -showcmdoutput    Show output of external processes.\n"
             " -showdeps         Show known dependency tree for specified targets.\n"
@@ -616,7 +685,7 @@ void FBuildOptions::DisplayVersion() const
         #define VERSION_CONFIG ""
     #endif
     OUTPUT( "FASTBuild " FBUILD_VERSION_STRING " " VERSION_CONFIG "- "
-            "Copyright 2012-2020 Franta Fulin - https://www.fastbuild.org\n" );
+            "Copyright 2012-2023 Franta Fulin - https://www.fastbuild.org\n" );
     #undef VERSION_CONFIG
 }
 

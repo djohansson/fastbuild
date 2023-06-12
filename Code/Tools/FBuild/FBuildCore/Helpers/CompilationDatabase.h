@@ -32,12 +32,18 @@ protected:
         Array< AString > m_ArgumentsEscaped;
     };
 
-    void VisitNodes( const Dependencies & dependencies, Array< bool > & visited );
-    void HandleObjectListNode( ObjectListNode * node );
+    // Track visited state for nodes using sweep tag
+    enum : uint32_t
+    {
+        eSweepTagNotSeen    = 0,
+        eSweepTagSeen       = 1,
+    };
+
+    void VisitNodes( const NodeGraph & nodeGraph, const Dependencies & dependencies );
+    void HandleObjectListNode( const NodeGraph & nodeGraph, ObjectListNode * node );
     static void HandleInputFile( const AString & inputFile, const AString & baseDir, void * userData );
     void HandleInputFile( const AString & inputFile, const AString & baseDir, ObjectListContext * ctx );
 
-    static void JSONEscape( AString & string );
     static void Unquote( AString & string );
 
     AString m_Output;

@@ -17,6 +17,7 @@
 class AliasNode;
 class AString;
 class CompilerNode;
+class ConstMemoryStream;
 class CopyDirNode;
 class CopyFileNode;
 class CSNode;
@@ -30,6 +31,7 @@ class IOStream;
 class LibraryNode;
 class LinkerNode;
 class ListDependenciesNode;
+class MemoryStream;
 class Node;
 class ObjectListNode;
 class ObjectNode;
@@ -56,21 +58,23 @@ public:
         m_Identifier[ 1 ] = 'G';
         m_Identifier[ 2 ] = 'D';
         m_Version = NODE_GRAPH_CURRENT_VERSION;
+        m_Padding = 0;
+        m_ContentHash = 0;
     }
     inline ~NodeGraphHeader() = default;
 
-    enum : uint8_t { NODE_GRAPH_CURRENT_VERSION = 157 };
+    enum : uint8_t { NODE_GRAPH_CURRENT_VERSION = 170 };
 
-    bool IsValid() const
-    {
-        return ( ( m_Identifier[ 0 ] == 'N' ) &&
-                 ( m_Identifier[ 1 ] == 'G' ) &&
-                 ( m_Identifier[ 2 ] == 'D' ) );
-    }
+    bool IsValid() const;
     bool IsCompatibleVersion() const { return m_Version == NODE_GRAPH_CURRENT_VERSION; }
+
+    uint64_t    GetContentHash() const          { return m_ContentHash; }
+    void        SetContentHash( uint64_t hash ) { m_ContentHash = hash; }
 private:
     char        m_Identifier[ 3 ];
     uint8_t     m_Version;
+    uint32_t    m_Padding;          // Unused
+    uint64_t    m_ContentHash;      // Hash of data excluding this header
 };
 
 // NodeGraph
@@ -78,7 +82,7 @@ private:
 class NodeGraph
 {
 public:
-    explicit NodeGraph();
+    explicit NodeGraph( unsigned nodeMapHashBits = 16 );
     ~NodeGraph();
 
     static NodeGraph * Initialize( const char * bffFile, const char * nodeGraphDBFile, bool forceMigration );
@@ -93,9 +97,10 @@ public:
     };
     NodeGraph::LoadResult Load( const char * nodeGraphDBFile );
 
-    LoadResult Load( IOStream & stream, const char * nodeGraphDBFile );
-    void Save( IOStream & stream, const char * nodeGraphDBFile ) const;
+    LoadResult Load( ConstMemoryStream & stream, const char * nodeGraphDBFile );
+    void Save( MemoryStream & stream, const char * nodeGraphDBFile ) const;
     void SerializeToText( const Dependencies & dependencies, AString & outBuffer ) const;
+    void SerializeToDotFormat( const Dependencies & deps, const bool fullGraph, AString & outBuffer ) const;
 
     // access existing nodes
     Node * FindNode( const AString & nodeName ) const;
@@ -133,6 +138,9 @@ public:
 
     void DoBuildPass( Node * nodeToBuild );
 
+    // Non-build operations that use the BuildPassTag can set it to a known value
+    void SetBuildPassTagForAllNodes( uint32_t value ) const;
+
     static void CleanPath( AString & name, bool makeFullPath = true );
     static void CleanPath( const AString & name, AString & cleanPath, bool makeFullPath = true );
     #if defined( ASSERTS_ENABLED )
@@ -158,6 +166,11 @@ private:
                                           uint32_t & nodesBuiltTime,
                                           uint32_t & totalNodeTime );
 
+    static bool CheckForCyclicDependencies( const Node * node );
+    static bool CheckForCyclicDependenciesRecurse( const Node * node, Array< const Node * > & dependencyStack );
+    static bool CheckForCyclicDependenciesRecurse( const Dependencies & dependencies,
+                                                   Array< const Node * > & dependencyStack );
+
     Node * FindNodeInternal( const AString & fullPath ) const;
 
     struct NodeWithDistance
@@ -170,7 +183,7 @@ private:
     void FindNearestNodesInternal( const AString & fullPath, Array< NodeWithDistance > & nodes, const uint32_t maxDistance = 5 ) const;
 
     struct UsedFile;
-    bool ReadHeaderAndUsedFiles( IOStream & nodeGraphStream,
+    bool ReadHeaderAndUsedFiles( ConstMemoryStream & nodeGraphStream,
                                  const char* nodeGraphDBFile,
                                  Array< UsedFile > & files,
                                  bool & compatibleDB,
@@ -178,11 +191,20 @@ private:
     uint32_t GetLibEnvVarHash() const;
 
     // load/save helpers
-    static void SaveRecurse( IOStream & stream, Node * node, Array< bool > & savedNodeFlags );
-    static void SaveRecurse( IOStream & stream, const Dependencies & dependencies, Array< bool > & savedNodeFlags );
-    bool LoadNode( IOStream & stream );
     static void SerializeToText( Node * node, uint32_t depth, AString & outBuffer );
     static void SerializeToText( const char * title, const Dependencies & dependencies, uint32_t depth, AString & outBuffer );
+    static void SerializeToDot( Node * node,
+                                const bool fullGraph,
+                                AString & outBuffer );
+    static void SerializeToDot( const char * dependencyType,
+                                const char * style,
+                                const Node * node,
+                                const Dependencies & dependencies,
+                                const bool fullGraph,
+                                AString & outBuffer );
+    static void SerializeToDot( const Dependencies & dependencies,
+                                const bool fullGraph,
+                                AString & outBuffer );
 
     // DB Migration
     void Migrate( const NodeGraph & oldNodeGraph );
@@ -193,10 +215,9 @@ private:
     static bool AreNodesTheSame( const void * baseA, const void * baseB, const ReflectedProperty & property );
     static bool DoDependenciesMatch( const Dependencies & depsA, const Dependencies & depsB );
 
-    enum { NODEMAP_TABLE_SIZE = 65536 };
     Node **         m_NodeMap;
+    uint32_t        m_NodeMapMaxKey; // Always equals to some power of 2 minus 1, can be used as mask.
     Array< Node * > m_AllNodes;
-    uint32_t        m_NextNodeIndex;
 
     Timer m_Timer;
 

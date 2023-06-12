@@ -7,7 +7,6 @@
 
 #include "Core/Env/Assert.h"
 #include "Core/FileIO/FileIO.h"
-#include "Core/Math/Constants.h"
 #include "Core/Math/Conversions.h"
 #include "Core/Process/Atomic.h"
 #include "Core/Process/Thread.h"
@@ -130,7 +129,7 @@ Process::~Process()
 #if defined( __WINDOWS__ )
     /*static*/ uint64_t Process::GetProcessCreationTime( const void * hProc )
     {
-        if ( hProc == 0 )
+        if ( hProc == nullptr )
         {
             return 0;
         }
@@ -173,7 +172,7 @@ bool Process::Spawn( const char * executable,
                      const char * environment,
                      bool shareHandles )
 {
-    PROFILE_FUNCTION
+    PROFILE_FUNCTION;
 
     ASSERT( !m_Started );
     ASSERT( executable );
@@ -570,7 +569,7 @@ bool Process::ReadAllData( AString & outMem,
                            AString & errMem,
                            uint32_t timeOutMS )
 {
-    Timer t;
+    const Timer t;
 
     #if defined( __LINUX__ )
         // Start with a short sleep interval to allow rapid termination of
@@ -587,7 +586,7 @@ bool Process::ReadAllData( AString & outMem,
         const bool abort = ( m_AbortFlag && AtomicLoadRelaxed( m_AbortFlag ) );
         if ( abort || mainAbort )
         {
-            PROFILE_SECTION( "Abort" )
+            PROFILE_SECTION( "Abort" );
             KillProcessTree();
             m_HasAborted = true;
             break;
@@ -612,7 +611,7 @@ bool Process::ReadAllData( AString & outMem,
         #if defined( __WINDOWS__ )
             if ( processExited == false )
             {
-                DWORD result = WaitForSingleObject( GetProcessInfo().hProcess, 15 );
+                const DWORD result = WaitForSingleObject( GetProcessInfo().hProcess, 15 );
                 if ( result == WAIT_TIMEOUT )
                 {
                     // Check if timeout is hit
@@ -699,7 +698,7 @@ bool Process::ReadAllData( AString & outMem,
 
         // read the new data
         DWORD bytesReadNow = 0;
-        if ( !::ReadFile( handle, buffer.Get() + sizeSoFar, bytesAvail, (LPDWORD)&bytesReadNow, 0 ) )
+        if ( !::ReadFile( handle, buffer.Get() + sizeSoFar, bytesAvail, (LPDWORD)&bytesReadNow, nullptr ) )
         {
             ASSERT( false ); // error!
         }
@@ -734,12 +733,13 @@ bool Process::ReadAllData( AString & outMem,
         }
 
         // how much space do we have left for reading into?
-        const uint32_t spaceInBuffer = ( buffer.GetReserved() - buffer.GetLength() );
+        uint32_t spaceInBuffer = ( buffer.GetReserved() - buffer.GetLength() );
         if ( spaceInBuffer == 0 )
         {
             // Expand buffer for new data in large chunks
             const uint32_t newBufferSize = ( buffer.GetReserved() + ( 16 * MEGABYTE ) );
             buffer.SetReserved( newBufferSize );
+            spaceInBuffer = ( buffer.GetReserved() - buffer.GetLength() );
         }
 
         // read the new data

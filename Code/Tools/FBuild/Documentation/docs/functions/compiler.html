@@ -45,6 +45,7 @@ distribution, caching and more.
   .SimpleDistributionMode       // (optional) Allow distribution of otherwise unsupported "compilers" (default: false)
   .CustomEnvironmentVariables   // (optional) Environment variables to set on remote host
   .ClangRewriteIncludes         // (optional) Use Clang's -frewrite-includes option when preprocessing (default: true)
+  .ClangGCCUpdateXLanguageArg   // (optional) Update -x language arg for second pass of compilation (default: false)
   .VS2012EnumBugFix             // (optional) Enable work-around for bug in VS2012 compiler (default: false)
   .Environment                  // (optional) Environment variables to use for local build
   .AllowResponseFile            // (optional) Allow response files to be used if not auto-detected (default: false)
@@ -207,6 +208,15 @@ Compiler( 'Test' )
     
     <p><hr></p>
     
+    <p><b>.ClangGCCUpdateXLanguageArg</b> - Bool - (Optional)</p>
+    <p>FASTBuild uses the -E preprocessor option combined with -frewrite-includes when preprocessing source with Clang to
+    preserve debug information. If the -x language arg is specified explicitly by the user on the command line (for example "-x c++"),
+    this is only correct for the first pass.</p>
+    <p>FASTBuild can update this arg ("-x c++" -> "-x c++-cpp-output" for example) but older versions of Clang (prior to 10) will ignore
+    define (-D) options on the command line when this is set, breaking compilation when -frewrite-includes is used).</p>
+    <p>To maintain backwards compatibility, this option is disabled by default and must be explicitly enabled if desired.</p>
+    <p><hr></p>
+    
 	<p><b>.VS2012EnumBugFix</b> - Bool - (Optional)</p>
 	<p><font color=red>NOTE:</font> This option incurs a minor build time cost that impacts compile times.</p>
 	<p>A bug exists in the Visual Studio 2012 compiler whereby enums in preprocessed code are sometimes incorrectly 
@@ -247,11 +257,11 @@ This results in very unintuitive compile errors.</p>
 <div id='compiler' class='newsitemheader'>Examples</div>
     <div class='newsitembody'>
 
-<b>MSVC - 2019 (v16.5.1)</b>
+<b>MSVC - 2019 (v16.8.3)</b>
 <div class='code'>// VisualStudio 2019 x64 Compiler
-.VS2017_BasePath         = 'C:\Program Files (x86)\Microsoft Visual Studio\2017\2017\Community'
-.VS2017_Version          = '14.16.27023'
-Compiler( 'Compiler-VS2017-x64' )
+.VS2019_BasePath         = 'C:\Program Files (x86)\Microsoft Visual Studio\2019\2019\Community'
+.VS2019_Version          = '14.28.29333'
+Compiler( 'Compiler-VS2019-x64' )
 {
     .Root       = '$VS2019_BasePath$/VC/Tools/MSVC/$VS2019_Version$/bin/Hostx64/x64'
     .Executable = '$Root$/cl.exe'
@@ -265,6 +275,7 @@ Compiler( 'Compiler-VS2017-x64' )
                     '$Root$/mspdbsrv.exe'
                     '$Root$/mspft140.dll'
                     '$Root$/msvcp140.dll'
+                    '$Root$/msvcp140_atomic_wait.dll' // Required circa 16.8.3 (14.28.29333)
                     '$Root$/tbbmalloc.dll' // Required as of 16.2 (14.22.27905)
                     '$Root$/vcruntime140.dll'
                     '$Root$/vcruntime140_1.dll' // Required as of 16.5.1 (14.25.28610)
@@ -413,6 +424,6 @@ Compiler( 'Compiler-x64Intel' )
 	unforeseen problems with this feature. This toggle is expected to be removed in v1.01.</p>
 </div>
 
-    </div><div class='footer'>&copy; 2012-2020 Franta Fulin</div></div></div>
+    </div><div class='footer'>&copy; 2012-2023 Franta Fulin</div></div></div>
 </body>
 </html>

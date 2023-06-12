@@ -25,9 +25,9 @@ private:
 
     // Helpers
     FBuildStats BuildGenerate( FBuildTestOptions options = FBuildTestOptions(), bool useDB = true, bool forceMigration = false ) const;
-    const char * GetTestGenerateDBFileName() const { return "../../../../tmp/Test/Unity/generate.fdb"; }
+    const char * GetTestGenerateDBFileName() const { return "../tmp/Test/Unity/generate.fdb"; }
     FBuildStats BuildCompile( FBuildTestOptions options = FBuildTestOptions(), bool useDB = true, bool forceMigration = false ) const;
-    const char * GetTestCompileDBFileName() const { return "../../../../tmp/Test/Unity/compile.fdb"; }
+    const char * GetTestCompileDBFileName() const { return "../tmp/Test/Unity/compile.fdb"; }
 
     // Tests
     void TestGenerate() const;
@@ -48,6 +48,7 @@ private:
     void LinkMultiple_InputFiles() const;
     void SortFiles() const;
     void CacheUsingRelativePaths() const;
+    void NoUnityCommandLineOption() const;
 };
 
 // Register Tests
@@ -71,6 +72,7 @@ REGISTER_TESTS_BEGIN( TestUnity )
     REGISTER_TEST( LinkMultiple_InputFiles )
     REGISTER_TEST( SortFiles )
     REGISTER_TEST( CacheUsingRelativePaths )
+    REGISTER_TEST( NoUnityCommandLineOption )
 REGISTER_TESTS_END
 
 // BuildGenerate
@@ -126,8 +128,8 @@ void TestUnity::TestGenerate_NoRebuild() const
 
     // Unity must be "built" every time, but it only writes files when they change
     // so record the time before and after
-    uint64_t dateTime1 = FileIO::GetFileLastWriteTime( unity1 );
-    uint64_t dateTime2 = FileIO::GetFileLastWriteTime( unity2 );
+    const uint64_t dateTime1 = FileIO::GetFileLastWriteTime( unity1 );
+    const uint64_t dateTime2 = FileIO::GetFileLastWriteTime( unity2 );
 
     // NTFS file resolution is 100ns, so sleep long enough to ensure
     // an invalid write would modify the time
@@ -164,8 +166,8 @@ void TestUnity::TestGenerate_NoRebuild_BFFChange() const
 
     // Unity must be "built" every time, but it only writes files when they change
     // so record the time before and after
-    uint64_t dateTime1 = FileIO::GetFileLastWriteTime( unity1 );
-    uint64_t dateTime2 = FileIO::GetFileLastWriteTime( unity2 );
+    const uint64_t dateTime1 = FileIO::GetFileLastWriteTime( unity1 );
+    const uint64_t dateTime2 = FileIO::GetFileLastWriteTime( unity2 );
 
     // NTFS file resolution is 100ns, so sleep long enough to ensure
     // an invalid write would modify the time
@@ -434,7 +436,6 @@ void TestUnity::ClangStaticAnalysis() const
     //
     FBuildTestOptions options;
     options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/TestUnity/ClangStaticAnalysis/fbuild.bff";
-    //options.m_NoUnity = true;
     FBuild fBuild( options );
     TEST_ASSERT( fBuild.Initialize() );
     TEST_ASSERT( fBuild.Build( "Compile" ) ); // Success, regardless of warnings
@@ -453,7 +454,6 @@ void TestUnity::ClangStaticAnalysis_InjectHeader() const
     //
     FBuildTestOptions options;
     options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/TestUnity/ClangStaticAnalysis/fbuild.bff";
-    //options.m_NoUnity = true;
     FBuild fBuild( options );
     TEST_ASSERT( fBuild.Initialize() );
     TEST_ASSERT( fBuild.Build( "Compile-InjectHeader" ) ); // Success, regardless of warnings
@@ -728,9 +728,9 @@ void TestUnity::SortFiles() const
     class Helper : public UnityNode
     {
     public:
-        ~Helper()
+        virtual ~Helper() override
         {
-            for ( FileIO::FileInfo * info : m_FileInfos )
+            for ( FileIO::FileInfo * info : m_HelperFileInfos )
             {
                 FDELETE info;
             }
@@ -744,99 +744,99 @@ void TestUnity::SortFiles() const
             #if defined( __WINDOWS__ )
                 info->m_Name.Replace( '/', '\\' ); // Allow test to specify unix style slashes
             #endif
-            m_FileInfos.Append( info );
+            m_HelperFileInfos.Append( info );
 
             // Add entry
-            m_Files.EmplaceBack( info, nullptr );
+            m_HelperFiles.EmplaceBack( info, nullptr );
         }
 
         void Sort()
         {
-            m_Files.Sort();
+            m_HelperFiles.Sort();
             #if defined( __WINDOWS__ )
-                for ( FileIO::FileInfo * info : m_FileInfos )
+                for ( FileIO::FileInfo * info : m_HelperFileInfos )
                 {
                     info->m_Name.Replace( '\\', '/' ); // Allow test to specify unix style slashes
                 }
             #endif
         }
 
-        const AString & operator[] ( size_t index ) const { return m_Files[ index ].GetName(); }
+        const AString & operator[] ( size_t index ) const { return m_HelperFiles[ index ].GetName(); }
 
-        Array< UnityNode::UnityFileAndOrigin >  m_Files;
-        Array< FileIO::FileInfo * >             m_FileInfos;
+        Array< UnityNode::UnityFileAndOrigin >  m_HelperFiles;
+        Array< FileIO::FileInfo * >             m_HelperFileInfos;
     };
 
     // Helper marcos to reduce boilerplate code
     #define SORT( ... )                                                         \
-    {                                                                           \
-        const char * inputs[] = { __VA_ARGS__ };                                \
+    do {                                                                           \
+        const char * const inputs[] = { __VA_ARGS__ };                          \
         Helper h;                                                               \
         for ( const char * input : inputs )                                     \
         {                                                                       \
             h.AddFile( input );                                                 \
         }                                                                       \
-        h.Sort();
+        h.Sort()
 
     #define TEST( ... )                                                         \
-        const char * outputs[] = { __VA_ARGS__ };                               \
+        const char * const outputs[] = { __VA_ARGS__ };                         \
         for ( size_t i = 0; i < (sizeof(outputs) / sizeof(const char *)); ++i ) \
         {                                                                       \
             TEST_ASSERTM( h[ i ] == outputs[ i ], "Mismatch @ index %u: %s != %s", (uint32_t)i, h[ i ].Get(), outputs[ i ] ); \
         }                                                                       \
-    }
+    } while( false )
 
     // Basic sanity check
-    SORT( "a.cpp", "b.cpp" )
-    TEST( "a.cpp", "b.cpp" )
+    SORT( "a.cpp", "b.cpp" );
+    TEST( "a.cpp", "b.cpp" );
 
-    SORT( "b.cpp", "a.cpp" )
-    TEST( "a.cpp", "b.cpp" )
+    SORT( "b.cpp", "a.cpp" );
+    TEST( "a.cpp", "b.cpp" );
 
     // Case is ignored at the file level
-    SORT( "a.cpp", "B.cpp" )
-    TEST( "a.cpp", "B.cpp" )
+    SORT( "a.cpp", "B.cpp" );
+    TEST( "a.cpp", "B.cpp" );
 
-    SORT( "b.cpp", "A.cpp" )
-    TEST( "A.cpp", "b.cpp" )
+    SORT( "b.cpp", "A.cpp" );
+    TEST( "A.cpp", "b.cpp" );
 
     // Files in same dir
-    SORT( "a/B.cpp", "a/a.cpp" )
-    TEST( "a/a.cpp", "a/B.cpp" )
+    SORT( "a/B.cpp", "a/a.cpp" );
+    TEST( "a/a.cpp", "a/B.cpp" );
 
-    SORT( "a/b.cpp", "a/A.cpp" )
-    TEST( "a/A.cpp", "a/b.cpp" )
+    SORT( "a/b.cpp", "a/A.cpp" );
+    TEST( "a/A.cpp", "a/b.cpp" );
 
     // Files in different dirs of same length
-    SORT( "b/a.cpp", "a/a.cpp" )
-    TEST( "a/a.cpp", "b/a.cpp" )
+    SORT( "b/a.cpp", "a/a.cpp" );
+    TEST( "a/a.cpp", "b/a.cpp" );
 
-    SORT( "B/a.cpp", "a/a.cpp" )
-    TEST( "a/a.cpp", "B/a.cpp" )
+    SORT( "B/a.cpp", "a/a.cpp" );
+    TEST( "a/a.cpp", "B/a.cpp" );
 
     // Subdirs come after dirs
-    SORT( "a/a.cpp",    "z.cpp" )
-    TEST( "z.cpp",      "a/a.cpp" )
+    SORT( "a/a.cpp",    "z.cpp" );
+    TEST( "z.cpp",      "a/a.cpp" );
 
-    SORT( "A/A.cpp",    "z.cpp" )
-    TEST( "z.cpp",      "A/A.cpp" )
+    SORT( "A/A.cpp",    "z.cpp" );
+    TEST( "z.cpp",      "A/A.cpp" );
 
-    SORT( "Z/A.cpp",    "a.cpp" )
-    TEST( "a.cpp",      "Z/A.cpp" )
+    SORT( "Z/A.cpp",    "a.cpp" );
+    TEST( "a.cpp",      "Z/A.cpp" );
 
-    SORT( "a.cpp", "bbb/a.cpp", "c.cpp" )
-    TEST( "a.cpp", "c.cpp",     "bbb/a.cpp" )
+    SORT( "a.cpp", "bbb/a.cpp", "c.cpp" );
+    TEST( "a.cpp", "c.cpp",     "bbb/a.cpp" );
 
     // subdirs that match filename come after all files
-    SORT( "a.cpp/a.cpp",    "a.cpp",    "b.cpp" )
-    TEST( "a.cpp",          "b.cpp",    "a.cpp/a.cpp" )
+    SORT( "a.cpp/a.cpp",    "a.cpp",    "b.cpp" );
+    TEST( "a.cpp",          "b.cpp",    "a.cpp/a.cpp" );
 
-    SORT( "aaa", "aba/a",   "aba" )
-    TEST( "aaa", "aba",     "aba/a" )
+    SORT( "aaa", "aba/a",   "aba" );
+    TEST( "aaa", "aba",     "aba/a" );
 
     // subdirs that are partial matches
-    SORT( "aa/a",   "a/a" )
-    TEST( "a/a",    "aa/a" )
+    SORT( "aa/a",   "a/a" );
+    TEST( "a/a",    "aa/a" );
 
     // differing depths
     SORT( "Folder/SubDir/a.cpp",    "Folder/z.cpp" );
@@ -956,6 +956,113 @@ void TestUnity::CacheUsingRelativePaths() const
         TEST_ASSERT( fBuild.GetStats().GetCacheHits() == 1 );
     }
 
+}
+
+// NoUnityCommandLineOption
+//------------------------------------------------------------------------------
+void TestUnity::NoUnityCommandLineOption() const
+{
+    //
+    // Ensure toggling -nounity results in expected rebuilding
+    //
+    const char * const dbFile = "../tmp/Test/Unity/NoUnityCommandLineOption/fbuild.fdb";
+    FBuildTestOptions options;
+    options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/TestUnity/NoUnityCommandLineOption/fbuild.bff";
+
+    // Build normally
+    {
+        FBuild fBuild( options );
+        TEST_ASSERT( fBuild.Initialize() );
+        TEST_ASSERT( fBuild.Build( "NoUnityCommandLineOption" ) );
+        TEST_ASSERT( fBuild.SaveDependencyGraph( dbFile ) );
+
+        // Check stats
+        //               Seen,  Built,  Type
+        CheckStatsNode ( 1,     1,      Node::UNITY_NODE );
+        CheckStatsNode ( 1,     1,      Node::OBJECT_NODE );
+        CheckStatsNode ( 1,     1,      Node::LIBRARY_NODE );
+    }
+
+    // Switch on -nounity
+    options.m_NoUnity = true;
+    options.m_ShowBuildReason = true;
+
+    // Build again
+    {
+        FBuild fBuild( options );
+        TEST_ASSERT( fBuild.Initialize( dbFile ) );
+        TEST_ASSERT( fBuild.Build( "NoUnityCommandLineOption" ) );
+        TEST_ASSERT( fBuild.SaveDependencyGraph( dbFile ) );
+
+        // Ensure rebuild was caused by specific build reason
+        TEST_ASSERT( GetRecordedOutput().Find( "(-nounity was added)" ) );
+
+        // Check stats
+        //               Seen,  Built,  Type
+        CheckStatsNode ( 1,     1,      Node::UNITY_NODE );
+        CheckStatsNode ( 2,     2,      Node::OBJECT_NODE );
+        CheckStatsNode ( 1,     1,      Node::LIBRARY_NODE );
+    }
+
+    // Remove -nounity
+    options.m_NoUnity = false;
+
+    // Build again
+    {
+        FBuild fBuild( options );
+        TEST_ASSERT( fBuild.Initialize( dbFile ) );
+        TEST_ASSERT( fBuild.Build( "NoUnityCommandLineOption" ) );
+        TEST_ASSERT( fBuild.SaveDependencyGraph( dbFile ) );
+
+        // Ensure rebuild was caused by specific build reason
+        TEST_ASSERT( GetRecordedOutput().Find( "(-nounity was removed)" ) );
+
+        // Check stats
+        //               Seen,  Built,  Type
+        CheckStatsNode ( 1,     1,      Node::UNITY_NODE );
+        CheckStatsNode ( 1,     0,      Node::OBJECT_NODE ); // NOTE: Unity object files can be re-used
+        CheckStatsNode ( 1,     1,      Node::LIBRARY_NODE );
+    }
+
+    // Switch on -nounity again
+    options.m_NoUnity = true;
+
+    // Build again
+    {
+        FBuild fBuild( options );
+        TEST_ASSERT( fBuild.Initialize( dbFile ) );
+        TEST_ASSERT( fBuild.Build( "NoUnityCommandLineOption" ) );
+        TEST_ASSERT( fBuild.SaveDependencyGraph( dbFile ) );
+
+        // Ensure rebuild was caused by specific build reason
+        TEST_ASSERT( AString( GetRecordedOutput() ).Replace( "(-nounity was added)", "" ) == 2 );
+
+        // Check stats
+        //               Seen,  Built,  Type
+        CheckStatsNode ( 1,     1,      Node::UNITY_NODE );
+        CheckStatsNode ( 2,     0,      Node::OBJECT_NODE ); // NOTE: Isolated object files can be re-used
+        CheckStatsNode ( 1,     1,      Node::LIBRARY_NODE );
+    }
+
+    // Remove -nounity again
+    options.m_NoUnity = false;
+
+    // Build again
+    {
+        FBuild fBuild( options );
+        TEST_ASSERT( fBuild.Initialize( dbFile ) );
+        TEST_ASSERT( fBuild.Build( "NoUnityCommandLineOption" ) );
+        TEST_ASSERT( fBuild.SaveDependencyGraph( dbFile ) );
+
+        // Ensure rebuild was caused by specific build reason
+        TEST_ASSERT( AString( GetRecordedOutput() ).Replace( "(-nounity was removed)", "" ) == 2 );
+
+        // Check stats
+        //               Seen,  Built,  Type
+        CheckStatsNode ( 1,     1,      Node::UNITY_NODE );
+        CheckStatsNode ( 1,     0,      Node::OBJECT_NODE ); // NOTE: Unity object files can be re-used
+        CheckStatsNode ( 1,     1,      Node::LIBRARY_NODE );
+    }
 }
 
 //------------------------------------------------------------------------------

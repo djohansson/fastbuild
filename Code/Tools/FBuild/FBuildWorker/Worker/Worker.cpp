@@ -28,20 +28,22 @@
 #include "Core/FileIO/FileIO.h"
 #include "Core/Network/NetworkStartupHelper.h"
 #include "Core/Process/Process.h"
+#include "Core/Process/Thread.h"
 #include "Core/Profile/Profile.h"
 #include "Core/Strings/AStackString.h"
 #include "Core/Tracing/Tracing.h"
 
 // system
 #if defined( __WINDOWS__ )
-    #include <psapi.h>
+    #include <Psapi.h>
 #endif
 #include <stdio.h>
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
-Worker::Worker( const AString & args, bool consoleMode )
+Worker::Worker( const AString & args, bool consoleMode, bool periodicRestart )
     : m_ConsoleMode( consoleMode )
+    , m_PeriodicRestart( periodicRestart )
     , m_MainWindow( nullptr )
     , m_ConnectionPool( nullptr )
     , m_NetworkStartupHelper( nullptr )
@@ -108,13 +110,17 @@ Worker::~Worker()
 //------------------------------------------------------------------------------
 int32_t Worker::Work()
 {
+    PROFILE_FUNCTION;
+
     // Open GUI or setup console
     if ( InConsoleMode() )
     {
         #if __WINDOWS__
             VERIFY( ::AllocConsole() );
             PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
+            PRAGMA_DISABLE_PUSH_CLANG_WINDOWS( "-Wdeprecated-declarations" ) // 'freopen' is deprecated: This function or variable may be unsafe...
             VERIFY( freopen( "CONOUT$", "w", stdout ) ); // TODO:C consider using freopen_s
+            PRAGMA_DISABLE_POP_CLANG_WINDOWS // -Wdeprecated-declarations
             PRAGMA_DISABLE_POP_MSVC // 4996
         #endif
 
@@ -128,11 +134,8 @@ int32_t Worker::Work()
     }
 
     // spawn work thread
-    m_WorkThread = Thread::CreateThread( &WorkThreadWrapper,
-                                         "WorkerThread",
-                                         ( 256 * KILOBYTE ),
-                                         this );
-    ASSERT( m_WorkThread != INVALID_THREAD_HANDLE );
+    Thread workThread;
+    workThread.Start( &WorkThreadWrapper, "WorkerThread", this, ( 256 * KILOBYTE ) );
 
     // Run the UI message loop if we're not in console mode
     if ( m_MainWindow )
@@ -141,14 +144,16 @@ int32_t Worker::Work()
     }
 
     // Join work thread and get exit code
-    return Thread::WaitForThread( m_WorkThread );
+    return static_cast<int32_t>( workThread.Join() );
 }
 
 // WorkThreadWrapper
 //------------------------------------------------------------------------------
 /*static*/ uint32_t Worker::WorkThreadWrapper( void * userData )
 {
-    Worker * worker = reinterpret_cast<Worker *>( userData );
+    PROFILE_SET_THREAD_NAME( "WorkerThread" );
+
+    Worker * worker = static_cast<Worker *>( userData );
     return worker->WorkThread();
 }
 
@@ -156,6 +161,8 @@ int32_t Worker::Work()
 //------------------------------------------------------------------------------
 uint32_t Worker::WorkThread()
 {
+    PROFILE_FUNCTION;
+
     // Initial status message
     StatusMessage( "FBuildWorker %s", FBUILD_VERSION_STRING );
 
@@ -201,7 +208,7 @@ uint32_t Worker::WorkThread()
 
         UpdateUI();
 
-        CheckForExeUpdate();
+        CheckIfRestartNeeded();
 
         PROFILE_SYNCHRONIZE
 
@@ -228,23 +235,23 @@ bool Worker::HasEnoughDiskSpace()
 {
     #if defined( __WINDOWS__ )
         // Only check disk space every few seconds
-        float elapsedTime = m_TimerLastDiskSpaceCheck.GetElapsedMS();
+        const float elapsedTime = m_TimerLastDiskSpaceCheck.GetElapsedMS();
         if ( ( elapsedTime < 15000.0f ) && ( m_LastDiskSpaceResult != -1 ) )
         {
             return ( m_LastDiskSpaceResult != 0 );
         }
         m_TimerLastDiskSpaceCheck.Start();
 
-        static constexpr uint64_t MIN_DISK_SPACE = 1024 * 1024 * 1024; // 1 GiB
+        constexpr uint64_t MIN_DISK_SPACE = 1024 * 1024 * 1024; // 1 GiB
 
-        unsigned __int64 freeBytesAvailable = 0;
-        unsigned __int64 totalNumberOfBytes = 0;
-        unsigned __int64 totalNumberOfFreeBytes = 0;
+        uint64_t freeBytesAvailable = 0;
+        uint64_t totalNumberOfBytes = 0;
+        uint64_t totalNumberOfFreeBytes = 0;
 
         // Check available disk space of temp path
         AStackString<> tmpPath;
         VERIFY( FBuild::GetTempDir( tmpPath ) );
-        BOOL result = GetDiskFreeSpaceExA( tmpPath.Get(), (PULARGE_INTEGER)&freeBytesAvailable, (PULARGE_INTEGER)&totalNumberOfBytes, (PULARGE_INTEGER)&totalNumberOfFreeBytes );
+        const BOOL result = GetDiskFreeSpaceExA( tmpPath.Get(), (PULARGE_INTEGER)&freeBytesAvailable, (PULARGE_INTEGER)&totalNumberOfBytes, (PULARGE_INTEGER)&totalNumberOfFreeBytes );
         if ( result && ( freeBytesAvailable >= MIN_DISK_SPACE ) )
         {
             m_LastDiskSpaceResult = 1;
@@ -265,7 +272,7 @@ bool Worker::HasEnoughMemory()
 {
     #if defined( __WINDOWS__ )
         // Only check free memory every few seconds
-        float elapsedTime = m_TimerLastMemoryCheck.GetElapsedMS();
+        const float elapsedTime = m_TimerLastMemoryCheck.GetElapsedMS();
         if ( ( elapsedTime < 1000.0f ) && ( m_LastMemoryCheckResult != -1 ) )
         {
             return ( m_LastMemoryCheckResult != 0 );
@@ -283,7 +290,7 @@ bool Worker::HasEnoughMemory()
             const uint64_t freeMemSize = ( limitMemSize - currentMemSize ) / MEGABYTE;
     
             // Check if the free memory is high enough
-            WorkerSettings & ws = WorkerSettings::Get();
+            const WorkerSettings & ws = WorkerSettings::Get();
             if ( freeMemSize > ws.GetMinimumFreeMemoryMiB() )
             {
                 m_LastMemoryCheckResult = 1;
@@ -303,11 +310,13 @@ bool Worker::HasEnoughMemory()
 //------------------------------------------------------------------------------
 void Worker::UpdateAvailability()
 {
+    PROFILE_FUNCTION;
+
     // Check disk space
     const bool hasEnoughDiskSpace = HasEnoughDiskSpace();
     const bool hasEnoughMemory = HasEnoughMemory();
 
-    WorkerSettings & ws = WorkerSettings::Get();
+    const WorkerSettings & ws = WorkerSettings::Get();
 
     m_IdleDetection.Update( ws.GetIdleThresholdPercent() );
 
@@ -360,6 +369,8 @@ void Worker::UpdateAvailability()
 //------------------------------------------------------------------------------
 void Worker::UpdateUI()
 {
+    PROFILE_FUNCTION;
+
     // throttle UI updates
     if ( m_UIUpdateTimer.GetElapsed() < 0.25f )
     {
@@ -367,7 +378,7 @@ void Worker::UpdateUI()
     }
 
     // title bar
-    size_t numConnections = m_ConnectionPool->GetNumConnections();
+    const size_t numConnections = m_ConnectionPool->GetNumConnections();
     AStackString<> status;
     status.Format( "%u Connections", (uint32_t)numConnections );
     if ( m_RestartNeeded )
@@ -393,7 +404,7 @@ void Worker::UpdateUI()
     if ( InConsoleMode() == false )
     {
         // thread output
-        JobQueueRemote & jqr = JobQueueRemote::Get();
+        const JobQueueRemote & jqr = JobQueueRemote::Get();
         const size_t numWorkers = jqr.GetNumWorkers();
         for ( size_t i = 0; i < numWorkers; ++i )
         {
@@ -422,10 +433,12 @@ void Worker::UpdateUI()
     m_UIUpdateTimer.Start();
 }
 
-// CheckForExeUpdate
+// CheckIfRestartNeeded
 //------------------------------------------------------------------------------
-void Worker::CheckForExeUpdate()
+void Worker::CheckIfRestartNeeded()
 {
+    PROFILE_FUNCTION;
+
     // if a restart is pending, can we restart yet?
     if ( m_RestartNeeded )
     {
@@ -443,8 +456,20 @@ void Worker::CheckForExeUpdate()
         return; // not running as a copy to allow restarts
     }
 
+    // Check if periodic restart time has been reached
+    if ( m_PeriodicRestart )
+    {
+        const float periodicRestartSecs = ( 4.0f * 60.0f * 60.0f ); // 4 hours
+        if ( m_PeriodicRestartTimer.GetElapsed() > periodicRestartSecs )
+        {
+            m_RestartNeeded = true;
+            JobQueueRemote::Get().SignalStopWorkers();
+            return;
+        }
+    }
+
     // get the current last write time
-    uint64_t lastWriteTime = FileIO::GetFileLastWriteTime( m_BaseExeName );
+    const uint64_t lastWriteTime = FileIO::GetFileLastWriteTime( m_BaseExeName );
 
     // If exe is has been deleted, but not replaced, do nothing
     // (may be part of two step delete/replace)

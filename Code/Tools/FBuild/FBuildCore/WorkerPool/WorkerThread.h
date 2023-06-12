@@ -5,8 +5,10 @@
 // Includes
 //------------------------------------------------------------------------------
 #include "Core/Env/Types.h"
+#include "Core/Process/Atomic.h"
 #include "Core/Process/Mutex.h"
 #include "Core/Process/Semaphore.h"
+#include "Core/Process/Thread.h"
 #include "Core/Strings/AStackString.h"
 #include "Core/Strings/AString.h"
 
@@ -19,7 +21,7 @@ class FileStream;
 class WorkerThread
 {
 public:
-    explicit WorkerThread( uint32_t threadIndex );
+    explicit WorkerThread( uint16_t threadIndex );
     void Init();
     virtual ~WorkerThread();
 
@@ -29,7 +31,7 @@ public:
     bool HasExited() const;
     void WaitForStop();
 
-    static uint32_t GetThreadIndex();
+    static uint16_t GetThreadIndex();
 
     static void GetTempFileDirectory( AString & tmpFileDirectory );
 
@@ -48,9 +50,10 @@ protected:
     virtual void Main();
 
     // signal to exit thread
-    volatile bool m_ShouldExit;
-    volatile bool m_Exited;
-    uint32_t      m_ThreadIndex;
+    Thread        m_Thread;
+    Atomic<bool>  m_ShouldExit;
+    Atomic<bool>  m_Exited;
+    uint16_t      m_ThreadIndex;
     Semaphore     m_MainThreadWaitForExit; // Used by main thread to wait for exit of worker
 
     static Mutex s_TmpRootMutex; // s_TmpRoot is shared by local and remote queues in tests

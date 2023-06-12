@@ -7,16 +7,18 @@
 #include "BFFKeywords.h"
 #include "BFFStackFrame.h"
 #include "Tools/FBuild/FBuildCore/BFF/BFFFile.h"
+#include "Tools/FBuild/FBuildCore/BFF/Functions/Function.h"
 #include "Tools/FBuild/FBuildCore/BFF/Tokenizer/BFFTokenizer.h"
 #include "Tools/FBuild/FBuildCore/BFF/Tokenizer/BFFTokenRange.h"
 #include "Tools/FBuild/FBuildCore/FBuild.h"
 #include "Tools/FBuild/FBuildCore/Graph/NodeGraph.h"
+#include "Tools/FBuild/FBuildCore/Helpers/BuildProfiler.h"
 #include "Tools/FBuild/FBuildCore/FLog.h"
-#include "Tools/FBuild/FBuildCore/BFF/Functions/Function.h"
 #include "Tools/FBuild/FBuildCore/FBuildVersion.h"
 
 // Core
 #include "Core/Env/Assert.h"
+#include "Core/Env/Env.h"
 #include "Core/FileIO/PathUtils.h"
 #include "Core/Profile/Profile.h"
 #include "Core/Strings/AStackString.h"
@@ -40,7 +42,8 @@ BFFParser::~BFFParser() = default;
 //------------------------------------------------------------------------------
 bool BFFParser::ParseFromFile( const char * fileName )
 {
-    PROFILE_FUNCTION
+    PROFILE_FUNCTION;
+    BuildProfilerScope buildProfileScope( "ParseBFF" );
 
     // Tokenize file
     if ( m_Tokenizer.TokenizeFromFile( AStackString<>( fileName ) ) == false )
@@ -65,7 +68,7 @@ bool BFFParser::ParseFromFile( const char * fileName )
 //------------------------------------------------------------------------------
 bool BFFParser::ParseFromString( const char * fileName, const char * fileContents )
 {
-    PROFILE_FUNCTION
+    PROFILE_FUNCTION;
 
     // Tokenize string
     if ( m_Tokenizer.TokenizeFromString( AStackString<>( fileName ), AStackString<>( fileContents ) ) == false )
@@ -100,7 +103,7 @@ bool BFFParser::Parse( BFFTokenRange & iter )
     while ( iter.IsAtEnd() == false )
     {
         // Handle updating current bff path variable
-        SetBuiltInVariable_CurrentBFFDir( iter->GetSourceFileName().Get() );
+        SetBuiltInVariable_CurrentBFFDir( iter->GetSourceFile() );
 
         const BFFToken * token = iter.GetCurrent();
 
@@ -386,7 +389,7 @@ bool BFFParser::ParseVariableDeclaration( BFFTokenRange & iter, const AString & 
         {
             newVal = i;
         }
-        return StoreVariableInt( varName, newVal, frame );
+        return StoreVariableInt( varName, opToken, newVal, frame );
     }
     else if ( rhsToken->IsBooelan() )
     {
@@ -412,7 +415,7 @@ bool BFFParser::ParseVariableDeclaration( BFFTokenRange & iter, const AString & 
 
         iter++; // Consume the rhs
 
-        return StoreVariableBool( varName, rhsToken->GetBoolean(), frame );
+        return StoreVariableBool( varName, rhsToken, rhsToken->GetBoolean(), frame );
     }
     else if ( rhsToken->IsVariable() )
     {
@@ -692,15 +695,15 @@ bool BFFParser::ParseUserFunctionCall( BFFTokenRange & iter, const BFFUserFuncti
             {
                 return false;
             }
-            BFFStackFrame::SetVarString( argName, value, &frame );
+            BFFStackFrame::SetVarString( argName, *arg, value, &frame );
         }
         else if ( arg->IsBooelan() )
         {
-            BFFStackFrame::SetVarBool( argName, arg->GetBoolean(), &frame );
+            BFFStackFrame::SetVarBool( argName, *arg, arg->GetBoolean(), &frame );
         }
         else if ( arg->IsNumber() )
         {
-            BFFStackFrame::SetVarInt( argName, arg->GetValueInt(), &frame );
+            BFFStackFrame::SetVarInt( argName, *arg, arg->GetValueInt(), &frame );
         }
         else
         {
@@ -731,7 +734,7 @@ bool BFFParser::ParseUserFunctionCall( BFFTokenRange & iter, const BFFUserFuncti
             }
 
             // Set in function frame with argument name
-            BFFStackFrame::SetVar( varSrc, argName, &frame );
+            BFFStackFrame::SetVar( varSrc, *arg, argName, &frame );
         }
     }
 
@@ -868,7 +871,7 @@ bool BFFParser::StoreVariableString( const AString & name,
                 finalValue.Replace( value.Get(), "" );
             }
 
-            BFFStackFrame::SetVarString( name, finalValue, frame );
+            BFFStackFrame::SetVarString( name, *opToken, finalValue, frame );
             return true;
         }
         else if ( var->IsArrayOfStrings() || dstIsEmpty )
@@ -895,7 +898,7 @@ bool BFFParser::StoreVariableString( const AString & name,
                 }
             }
 
-            BFFStackFrame::SetVarArrayOfStrings( name, finalValues, frame );
+            BFFStackFrame::SetVarArrayOfStrings( name, *opToken, finalValues, frame );
             return true;
         }
         else
@@ -910,7 +913,7 @@ bool BFFParser::StoreVariableString( const AString & name,
         if ( ( var == nullptr ) || var->IsString() )
         {
             // OK - asigning to a new variable or to a string
-            BFFStackFrame::SetVarString( name, value, frame );
+            BFFStackFrame::SetVarString( name, *opToken, value, frame );
             return true;
         }
         else if ( var->IsArrayOfStrings() || dstIsEmpty )
@@ -918,7 +921,7 @@ bool BFFParser::StoreVariableString( const AString & name,
             // OK - store new string as the single element of array
             StackArray<AString> values;
             values.Append( value );
-            BFFStackFrame::SetVarArrayOfStrings( name, values, frame );
+            BFFStackFrame::SetVarArrayOfStrings( name, *opToken, values, frame );
             return true;
         }
         else
@@ -929,7 +932,6 @@ bool BFFParser::StoreVariableString( const AString & name,
             return false;
         }
     }
-    return false;
 }
 
 // StoreVariableArray
@@ -1169,13 +1171,13 @@ bool BFFParser::StoreVariableArray( const AString & name,
     if ( varType == BFFVariable::VAR_ARRAY_OF_STRUCTS )
     {
         // structs
-        BFFStackFrame::SetVarArrayOfStructs( name, structValues, frame );
+        BFFStackFrame::SetVarArrayOfStructs( name, *opToken, structValues, frame );
     }
     else
     {
         ASSERT( varType == BFFVariable::VAR_ARRAY_OF_STRINGS );
         // strings
-        BFFStackFrame::SetVarArrayOfStrings( name, values, frame );
+        BFFStackFrame::SetVarArrayOfStrings( name, *opToken, values, frame );
     }
 
     return true;
@@ -1225,26 +1227,26 @@ bool BFFParser::StoreVariableStruct( const AString & name,
     Array<BFFVariable *> & structMembers = stackFrame.GetLocalVariables();
 
     // Register this variable
-    BFFStackFrame::SetVarStruct( name, Move( structMembers ), frame ? frame : stackFrame.GetParent() );
+    BFFStackFrame::SetVarStruct( name, *operatorToken, Move( structMembers ), frame ? frame : stackFrame.GetParent() );
 
     return true;
 }
 
 // StoreVariableBool
 //------------------------------------------------------------------------------
-bool BFFParser::StoreVariableBool( const AString & name, bool value, BFFStackFrame * frame )
+bool BFFParser::StoreVariableBool( const AString & name, const BFFToken * token, bool value, BFFStackFrame * frame )
 {
     // Register this variable
-    BFFStackFrame::SetVarBool( name, value, frame );
+    BFFStackFrame::SetVarBool( name, *token, value, frame );
 
     return true;
 }
 
 // StoreVariableInt
 //------------------------------------------------------------------------------
-bool BFFParser::StoreVariableInt( const AString & name, int value, BFFStackFrame * frame )
+bool BFFParser::StoreVariableInt( const AString & name, const BFFToken * token, int value, BFFStackFrame * frame )
 {
-    BFFStackFrame::SetVarInt( name, value, frame );
+    BFFStackFrame::SetVarInt( name, *token, value, frame );
 
     return true;
 }
@@ -1370,7 +1372,7 @@ bool BFFParser::StoreVariableToVariable( const AString & dstName, const BFFToken
                 values.Append( varSrc->GetString() );
             }
 
-            BFFStackFrame::SetVarArrayOfStrings( dstName, values, dstFrame );
+            BFFStackFrame::SetVarArrayOfStrings( dstName, varSrc->GetToken(), values, dstFrame );
             return true;
         }
 
@@ -1388,7 +1390,7 @@ bool BFFParser::StoreVariableToVariable( const AString & dstName, const BFFToken
             }
             values.Append( varSrc );
 
-            BFFStackFrame::SetVarArrayOfStructs( dstName, values, dstFrame );
+            BFFStackFrame::SetVarArrayOfStructs( dstName, varSrc->GetToken(), values, dstFrame );
             return true;
         }
 
@@ -1401,12 +1403,12 @@ bool BFFParser::StoreVariableToVariable( const AString & dstName, const BFFToken
                 const BFFVariable * var = ( dstFrame ? dstFrame : BFFStackFrame::GetCurrent() )->GetLocalVar( dstName );
                 if ( varDst != var )
                 {
-                    BFFStackFrame::SetVarArrayOfStrings( dstName, varDst->GetArrayOfStrings(), dstFrame );
+                    BFFStackFrame::SetVarArrayOfStrings( dstName, varSrc->GetToken(), varDst->GetArrayOfStrings(), dstFrame );
                 }
             }
             else
             {
-                BFFStackFrame::SetVarArrayOfStrings( dstName, Array< AString >(), dstFrame );
+                BFFStackFrame::SetVarArrayOfStrings( dstName, varSrc->GetToken(), Array< AString >(), dstFrame );
             }
             return true;
         }
@@ -1420,12 +1422,12 @@ bool BFFParser::StoreVariableToVariable( const AString & dstName, const BFFToken
                 const BFFVariable * var = ( dstFrame ? dstFrame : BFFStackFrame::GetCurrent() )->GetLocalVar( dstName );
                 if ( varDst != var )
                 {
-                    BFFStackFrame::SetVarArrayOfStructs( dstName, varDst->GetArrayOfStructs(), dstFrame );
+                    BFFStackFrame::SetVarArrayOfStructs( dstName, varSrc->GetToken(), varDst->GetArrayOfStructs(), dstFrame );
                 }
             }
             else
             {
-                BFFStackFrame::SetVarArrayOfStructs(dstName, Array< const BFFVariable * >(), dstFrame);
+                BFFStackFrame::SetVarArrayOfStructs( dstName, varSrc->GetToken(), Array< const BFFVariable * >(), dstFrame );
             }
             return true;
         }
@@ -1433,14 +1435,14 @@ bool BFFParser::StoreVariableToVariable( const AString & dstName, const BFFToken
         // ArrayOfStrings to empty array, assignment or concatenation
         if ( dstIsEmpty && srcType == BFFVariable::VAR_ARRAY_OF_STRINGS && !subtract )
         {
-            BFFStackFrame::SetVarArrayOfStrings( dstName, varSrc->GetArrayOfStrings(), dstFrame );
+            BFFStackFrame::SetVarArrayOfStrings( dstName, varSrc->GetToken(), varSrc->GetArrayOfStrings(), dstFrame );
             return true;
         }
 
         // ArrayOfStructs to empty array, assignment or concatenation
         if ( dstIsEmpty && srcType == BFFVariable::VAR_ARRAY_OF_STRUCTS && !subtract )
         {
-            BFFStackFrame::SetVarArrayOfStructs( dstName, varSrc->GetArrayOfStructs(), dstFrame );
+            BFFStackFrame::SetVarArrayOfStructs( dstName, varSrc->GetToken(), varSrc->GetArrayOfStructs(), dstFrame );
             return true;
         }
     }
@@ -1454,17 +1456,17 @@ bool BFFParser::StoreVariableToVariable( const AString & dstName, const BFFToken
             {
                 AStackString< 2048 > finalValue(varDst->GetString());
                 finalValue += varSrc->GetString();
-                BFFStackFrame::SetVarString( dstName, finalValue, dstFrame );
+                BFFStackFrame::SetVarString( dstName, varSrc->GetToken(), finalValue, dstFrame );
             }
             else if ( subtract )
             {
                 AStackString< 2048 > finalValue(varDst->GetString());
                 finalValue.Replace( varSrc->GetString().Get(), "" );
-                BFFStackFrame::SetVarString( dstName, finalValue, dstFrame );
+                BFFStackFrame::SetVarString( dstName, varSrc->GetToken(), finalValue, dstFrame );
             }
             else
             {
-                BFFStackFrame::SetVarString( dstName, varSrc->GetString(), dstFrame );
+                BFFStackFrame::SetVarString( dstName, varSrc->GetToken(), varSrc->GetString(), dstFrame );
             }
             return true;
         }
@@ -1478,11 +1480,11 @@ bool BFFParser::StoreVariableToVariable( const AString & dstName, const BFFToken
                 values.SetCapacity( num );
                 values.Append( varDst->GetArrayOfStrings() );
                 values.Append( varSrc->GetArrayOfStrings() );
-                BFFStackFrame::SetVarArrayOfStrings( dstName, values, dstFrame );
+                BFFStackFrame::SetVarArrayOfStrings( dstName, varSrc->GetToken(), values, dstFrame );
             }
             else
             {
-                BFFStackFrame::SetVarArrayOfStrings( dstName, varSrc->GetArrayOfStrings(), dstFrame );
+                BFFStackFrame::SetVarArrayOfStrings( dstName, varSrc->GetToken(), varSrc->GetArrayOfStrings(), dstFrame );
             }
             return true;
         }
@@ -1496,11 +1498,11 @@ bool BFFParser::StoreVariableToVariable( const AString & dstName, const BFFToken
                 values.SetCapacity( num );
                 values.Append( varDst->GetArrayOfStructs() );
                 values.Append( varSrc->GetArrayOfStructs() );
-                BFFStackFrame::SetVarArrayOfStructs( dstName, values, dstFrame );
+                BFFStackFrame::SetVarArrayOfStructs( dstName, varSrc->GetToken(), values, dstFrame );
             }
             else
             {
-                BFFStackFrame::SetVarArrayOfStructs( dstName, varSrc->GetArrayOfStructs(), dstFrame );
+                BFFStackFrame::SetVarArrayOfStructs( dstName, varSrc->GetToken(), varSrc->GetArrayOfStructs(), dstFrame );
             }
             return true;
         }
@@ -1520,12 +1522,12 @@ bool BFFParser::StoreVariableToVariable( const AString & dstName, const BFFToken
             {
                 newVal = varSrc->GetInt();
             }
-            return StoreVariableInt( dstName, newVal, dstFrame );
+            return StoreVariableInt( dstName, &varSrc->GetToken(), newVal, dstFrame );
         }
 
         if ( ( srcType == BFFVariable::VAR_BOOL ) && !concat && !subtract )
         {
-            return StoreVariableBool( dstName, varSrc->GetBool(), dstFrame );
+            return StoreVariableBool( dstName, &varSrc->GetToken(), varSrc->GetBool(), dstFrame );
         }
 
         if ( ( srcType == BFFVariable::VAR_STRUCT ) && !subtract )
@@ -1542,7 +1544,7 @@ bool BFFParser::StoreVariableToVariable( const AString & dstName, const BFFToken
             else
             {
                 // Register this variable
-                BFFStackFrame::SetVarStruct( dstName, srcMembers, dstFrame );
+                BFFStackFrame::SetVarStruct( dstName, varSrc->GetToken(), srcMembers, dstFrame );
             }
             return true;
         }
@@ -1663,7 +1665,7 @@ void BFFParser::CreateBuiltInVariables()
     {
         AStackString<> varName( "._WORKING_DIR_" );
         ASSERT( BFFStackFrame::GetVarAny( AStackString<>( varName.Get() + 1 ) ) == nullptr );
-        BFFStackFrame::SetVarString( varName, FBuild::Get().GetWorkingDir(), &m_BaseStackFrame );
+        BFFStackFrame::SetVarString( varName, BFFToken::GetBuiltInToken(), FBuild::Get().GetWorkingDir(), &m_BaseStackFrame );
         // TODO:B Add a mechanism to mark variable as read-only
     }
 
@@ -1671,7 +1673,7 @@ void BFFParser::CreateBuiltInVariables()
     {
         AStackString<> varName( "._FASTBUILD_VERSION_STRING_" );
         ASSERT( BFFStackFrame::GetVarAny( AStackString<>( varName.Get() + 1 ) ) == nullptr );
-        BFFStackFrame::SetVarString( varName, AStackString<>(FBUILD_VERSION_STRING), &m_BaseStackFrame );
+        BFFStackFrame::SetVarString( varName, BFFToken::GetBuiltInToken(), AStackString<>(FBUILD_VERSION_STRING), &m_BaseStackFrame );
         // TODO:B Add a mechanism to mark variable as read-only
     }
 
@@ -1679,33 +1681,40 @@ void BFFParser::CreateBuiltInVariables()
     {
         AStackString<> varName( "._FASTBUILD_VERSION_" );
         ASSERT( BFFStackFrame::GetVarAny( AStackString<>( varName.Get() + 1 ) ) == nullptr );
-        BFFStackFrame::SetVarInt( varName, (int32_t)FBUILD_VERSION, &m_BaseStackFrame );
+        BFFStackFrame::SetVarInt( varName, BFFToken::GetBuiltInToken(), (int32_t)FBUILD_VERSION, &m_BaseStackFrame );
+        // TODO:B Add a mechanism to mark variable as read-only
+    }
+
+    // _FASTBUILD_EXE_PATH_
+    {
+        AStackString<> varName( "._FASTBUILD_EXE_PATH_" );
+        ASSERT( BFFStackFrame::GetVarAny( AStackString<>( varName.Get() + 1 ) ) == nullptr );
+        AStackString<> exeName;
+        Env::GetExePath( exeName );
+        BFFStackFrame::SetVarString( varName, BFFToken::GetBuiltInToken(), exeName, &m_BaseStackFrame );
         // TODO:B Add a mechanism to mark variable as read-only
     }
 }
 
 // SetBuiltInVariable_CurrentBFFDir
 //------------------------------------------------------------------------------
-void BFFParser::SetBuiltInVariable_CurrentBFFDir( const char * fileName )
+void BFFParser::SetBuiltInVariable_CurrentBFFDir( const BFFFile & file )
 {
+    // Early out if file has not changed.
+    if ( m_CurrentBFFFile == &file )
+    {
+        return;
+    }
+    m_CurrentBFFFile = &file;
+
     // Handle special case in tests
     if ( FBuild::IsValid() == false )
     {
         return;
     }
 
-    // Early out if file has not changed.
-    // - Note that this is the path without processing below so we can avoid
-    //   doing that work if the path has not changed (i.e. the value stored here
-    //   is not the same as the contents of the variable)
-    if ( m_CurrentBFFDir == fileName )
-    {
-        return;
-    }
-    m_CurrentBFFDir = fileName;
-
     // Get absolute path to bff
-    AStackString<> fullPath( fileName );
+    AStackString<> fullPath( file.GetFileName() );
     NodeGraph::CleanPath( fullPath );
 
     // Get path to bff relative to working dir
@@ -1719,7 +1728,7 @@ void BFFParser::SetBuiltInVariable_CurrentBFFDir( const char * fileName )
 
     // Set the variable - always in the base scope
     const AStackString<> varName( "._CURRENT_BFF_DIR_" );
-    BFFStackFrame::SetVarString( varName, relativePath, &m_BaseStackFrame );
+    BFFStackFrame::SetVarString( varName, BFFToken::GetBuiltInToken(), relativePath, &m_BaseStackFrame );
     // TODO:B Add a mechanism to mark variable as read-only
 }
 

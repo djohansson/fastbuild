@@ -13,7 +13,7 @@
 
 // FBuildOptions
 //------------------------------------------------------------------------------
-struct FBuildOptions
+class FBuildOptions
 {
 public:
     FBuildOptions();
@@ -52,11 +52,13 @@ public:
     // Build Behaviour
     bool        m_ForceCleanBuild                   = false;
     bool        m_StopOnFirstError                  = true;
-    bool        m_FastCancel                        = false;
+    bool        m_FastCancel                        = true;
     bool        m_WaitMode                          = false;
     bool        m_DisplayTargetList                 = false;
     bool        m_ShowHiddenTargets                 = false;
     bool        m_DisplayDependencyDB               = false;
+    bool        m_GenerateDotGraph                  = false;
+    bool        m_GenerateDotGraphFull              = false;
     bool        m_GenerateCompilationDatabase       = false;
     bool        m_NoUnity                           = false;
 
@@ -66,7 +68,7 @@ public:
     bool        m_CacheInfo                         = false;
     bool        m_CacheVerbose                      = false;
     uint32_t    m_CacheTrim                         = 0;
-    int32_t     m_CacheCompressionLevel             = -1; // See Compresssor.h
+    int16_t     m_CacheCompressionLevel             = -1; // See Compresssor.h
 
     // Distributed Compilation
     bool        m_AllowDistributed                  = false;
@@ -74,6 +76,7 @@ public:
     bool        m_NoLocalConsumptionOfRemoteJobs    = false;
     bool        m_AllowLocalRace                    = true;
     uint16_t    m_DistributionPort                  = Protocol::PROTOCOL_PORT;
+    int16_t     m_DistributionCompressionLevel      = -1; // See Compresssor.h
 
     // General Output
     bool        m_ShowVerbose                       = false;
@@ -87,8 +90,9 @@ public:
     bool        m_ShowTotalTimeTaken                = true;
     bool        m_ShowPrintStatements               = true;
     bool        m_NoSummaryOnError                  = false;
-    bool        m_GenerateReport                    = false;
+    AString     m_ReportType;
     bool        m_EnableMonitor                     = false;
+    bool        m_Profile                           = false;
 
     // DB loading/saving
     bool        m_SaveDBOnCompletion                = false;

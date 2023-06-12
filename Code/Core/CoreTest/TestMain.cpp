@@ -3,7 +3,7 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "TestFramework/UnitTest.h"
+#include "TestFramework/TestGroup.h"
 
 // main
 //------------------------------------------------------------------------------
@@ -20,6 +20,7 @@ int main( int, char *[] )
     REGISTER_TESTGROUP( TestLevenshteinDistance )
     REGISTER_TESTGROUP( TestMemPoolBlock )
     REGISTER_TESTGROUP( TestMutex )
+    REGISTER_TESTGROUP( TestNetwork )
     REGISTER_TESTGROUP( TestPathUtils )
     REGISTER_TESTGROUP( TestReflection )
     REGISTER_TESTGROUP( TestSemaphore )
@@ -27,11 +28,13 @@ int main( int, char *[] )
     REGISTER_TESTGROUP( TestSmallBlockAllocator )
     REGISTER_TESTGROUP( TestSystemMutex )
     REGISTER_TESTGROUP( TestTestTCPConnectionPool )
+    REGISTER_TESTGROUP( TestThread )
     REGISTER_TESTGROUP( TestTimer )
+    REGISTER_TESTGROUP( TestUnorderedMap )
 
-    UnitTestManager utm;
+    TestManager utm;
 
-    bool allPassed = utm.RunTests();
+    const bool allPassed = utm.RunTests();
 
     return allPassed ? 0 : -1;
 }

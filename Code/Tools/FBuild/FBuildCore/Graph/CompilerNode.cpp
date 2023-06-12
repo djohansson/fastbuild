@@ -25,6 +25,7 @@ REFLECT_NODE_BEGIN( CompilerNode, Node, MetaNone() )
     REFLECT( m_ForceResponseFile,   "ForceResponseFile",    MetaOptional() )
     REFLECT( m_VS2012EnumBugFix,    "VS2012EnumBugFix",     MetaOptional() )
     REFLECT( m_ClangRewriteIncludes, "ClangRewriteIncludes", MetaOptional() )
+    REFLECT( m_ClangGCCUpdateXLanguageArg, "ClangGCCUpdateXLanguageArg",  MetaOptional() )
     REFLECT( m_ClangFixupUnity_Disable, "ClangFixupUnity_Disable", MetaOptional() )
     REFLECT( m_ExecutableRootPath,  "ExecutableRootPath",   MetaOptional() + MetaPath() )
     REFLECT( m_SimpleDistributionMode,  "SimpleDistributionMode",   MetaOptional() )
@@ -48,6 +49,7 @@ CompilerNode::CompilerNode()
     , m_ForceResponseFile( false )
     , m_VS2012EnumBugFix( false )
     , m_ClangRewriteIncludes( true )
+    , m_ClangGCCUpdateXLanguageArg( false )
     , m_ClangFixupUnity_Disable( false )
     , m_CompilerFamilyString( "auto" )
     , m_CompilerFamilyEnum( static_cast< uint8_t >( CUSTOM ) )
@@ -63,7 +65,7 @@ CompilerNode::CompilerNode()
 /*virtual*/ bool CompilerNode::Initialize( NodeGraph & nodeGraph, const BFFToken * iter, const Function * function )
 {
     // .Executable
-    Dependencies compilerExeFile( 1, false );
+    Dependencies compilerExeFile( 1 );
     if ( !Function::GetFileNode( nodeGraph, iter, function, m_Executable, ".Executable", compilerExeFile ) )
     {
         return false; // GetFileNode will have emitted an error
@@ -71,7 +73,7 @@ CompilerNode::CompilerNode()
     ASSERT( compilerExeFile.GetSize() == 1 ); // Should not be possible to expand to > 1 thing
 
     // .ExtraFiles
-    Dependencies extraFiles( 32, true );
+    Dependencies extraFiles( 32 );
     if ( !Function::GetNodeList( nodeGraph, iter, function, ".ExtraFiles", m_ExtraFiles, extraFiles ) )
     {
         return false; // GetNodeList will have emitted an error
@@ -121,8 +123,8 @@ CompilerNode::CompilerNode()
 
     // Store Static Dependencies
     m_StaticDependencies.SetCapacity( 1 + extraFiles.GetSize() );
-    m_StaticDependencies.Append( compilerExeFile );
-    m_StaticDependencies.Append( extraFiles );
+    m_StaticDependencies.Add( compilerExeFile );
+    m_StaticDependencies.Add( extraFiles );
 
     if (InitializeCompilerFamily( iter, function ) == false)
     {

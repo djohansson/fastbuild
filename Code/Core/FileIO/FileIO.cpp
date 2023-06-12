@@ -7,17 +7,22 @@
 #include "FileStream.h"
 
 // Core
+#include "Core/Containers/UniquePtr.h"
 #include "Core/Env/ErrorFormat.h"
+#if defined( __WINDOWS__ )
+    #include "Core/Env/WindowsHeader.h"
+#endif
 #include "Core/FileIO/PathUtils.h"
 #include "Core/Process/Thread.h"
+#include "Core/Math/Conversions.h"
 #include "Core/Profile/Profile.h"
 #include "Core/Strings/AStackString.h"
+#include "Core/Time/Time.h"
 #include "Core/Time/Timer.h"
 
 // system
 #if defined( __WINDOWS__ )
-    #include "Core/Env/WindowsHeader.h"
-    #include "Core/Time/Time.h"
+    #include <shellapi.h>
 #endif
 #if defined( __LINUX__ ) || defined( __APPLE__ )
     #include <dirent.h>
@@ -76,10 +81,10 @@
 //------------------------------------------------------------------------------
 /*static*/ bool FileIO::FileExists( const char * fileName )
 {
-    PROFILE_FUNCTION
+    PROFILE_FUNCTION;
 #if defined( __WINDOWS__ )
     // see if we can get attributes
-    DWORD attributes = GetFileAttributes( fileName );
+    const DWORD attributes = GetFileAttributes( fileName );
     if ( attributes == INVALID_FILE_ATTRIBUTES )
     {
         return false;
@@ -105,7 +110,7 @@
 /*static*/ bool FileIO::DirectoryDelete( const AString & path )
 {
 #if defined( __WINDOWS__ )
-    BOOL result = RemoveDirectory( path.Get() );
+    const BOOL result = RemoveDirectory( path.Get() );
     if ( result == FALSE )
     {
         return false; // failed to delete
@@ -127,9 +132,9 @@
 //------------------------------------------------------------------------------
 /*static*/ bool FileIO::FileDelete( const char * fileName )
 {
-    PROFILE_FUNCTION
+    PROFILE_FUNCTION;
 #if defined( __WINDOWS__ )
-    BOOL result = DeleteFile( fileName );
+    const BOOL result = DeleteFile( fileName );
     if ( result == FALSE )
     {
         return false; // failed to delete
@@ -175,7 +180,7 @@
             }
 
             // try to remove read-only flag on dst file
-            dwAttrs = ( dwAttrs & ~FILE_ATTRIBUTE_READONLY );
+            dwAttrs = ( dwAttrs & (uint32_t)(~FILE_ATTRIBUTE_READONLY) );
             if ( FALSE == SetFileAttributes( dstFileName, dwAttrs ) )
             {
                 return false; // failed to remove read-only flag
@@ -252,7 +257,22 @@
         return false;
     }
 
-    ssize_t bytesCopied = sendfile( dest, source, 0, stat_source.st_size );
+    ssize_t bytesCopied = 0;
+    ssize_t offset = 0;
+
+    while ( offset < stat_source.st_size )
+    {
+        // sendfile has an arbitrary limit of 0x7ffff000 on all systems (even if 64bit)
+        const ssize_t remaining = stat_source.st_size - offset;
+        const ssize_t count = Math::Min<ssize_t>( remaining, 0x7ffff000 );
+
+        const ssize_t sent = sendfile( dest, source, &offset, count );
+        if ( sent <= 0 )
+        {
+            break; // Copy failed (incomplete)
+        }
+        bytesCopied += sent;
+    }
 
     close( source );
     close( dest );
@@ -285,7 +305,7 @@
 {
     ASSERT( results );
 
-    size_t oldSize = results->GetSize();
+    const size_t oldSize = results->GetSize();
     if ( recurse )
     {
         // make a copy of the path as it will be modified during recursion
@@ -310,7 +330,7 @@
 {
     ASSERT( results );
 
-    size_t oldSize = results->GetSize();
+    const size_t oldSize = results->GetSize();
     if ( recurse )
     {
         // make a copy of the path as it will be modified during recursion
@@ -364,7 +384,7 @@
 {
     #if defined( __WINDOWS__ )
         char buffer[ MAX_PATH ];
-        DWORD len = GetCurrentDirectory( MAX_PATH, buffer );
+        const DWORD len = GetCurrentDirectory( MAX_PATH, buffer );
         if ( len != 0 )
         {
             output = buffer;
@@ -399,7 +419,7 @@
         // (we'll use the windows directory)
         char otherFolder[ 512 ];
         otherFolder[ 0 ] = 0;
-        UINT len = ::GetWindowsDirectory( otherFolder, 512 );
+        const UINT len = ::GetWindowsDirectory( otherFolder, 512 );
         if ( ( len == 0 ) || ( len > 511 ) )
         {
             return false;
@@ -440,7 +460,7 @@
 {
     #if defined( __WINDOWS__ )
         char buffer[ MAX_PATH ];
-        DWORD len = GetTempPath( MAX_PATH, buffer );
+        const DWORD len = GetTempPath( MAX_PATH, buffer );
         if ( len != 0 )
         {
             output = buffer;
@@ -480,7 +500,7 @@
         }
     #elif defined( __LINUX__ ) || defined( __APPLE__ )
         umask( 0 ); // disable default creation mask // TODO:LINUX TODO:MAC Changes global program state; needs investigation
-        mode_t mode = S_IRWXU | S_IRWXG | S_IRWXO; // TODO:LINUX TODO:MAC Check these permissions
+        mode_t mode = ( S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH );
         if ( mkdir( path.Get(), mode ) == 0 )
         {
             return true; // created ok
@@ -504,7 +524,7 @@
 /*static*/ bool FileIO::DirectoryExists( const AString & path )
 {
     #if defined( __WINDOWS__ )
-        DWORD res = GetFileAttributes( path.Get() );
+        const DWORD res = GetFileAttributes( path.Get() );
         if ( ( res != INVALID_FILE_ATTRIBUTES ) &&
             ( ( res & FILE_ATTRIBUTE_DIRECTORY ) != 0 ) )
         {
@@ -593,6 +613,89 @@
     return EnsurePathExists( pathOnly );
 }
 
+// NormalizeWindowsPathCasing
+//------------------------------------------------------------------------------
+#if defined( __WINDOWS__ )
+    /*static*/ bool FileIO::NormalizeWindowsPathCasing( const AString & path, AString & outNormalizedPath )
+    {
+        // Take a full Windows path and fix the casing so that:
+        // a) the drive letter is always upper-case
+        // b) the components of the path are in the actual case of the parts
+        //    in the file system
+        //
+        // NOTE: We don't want this to resolve substs because some uses
+        //       of subst are specifically to normalize paths between machines
+        //
+        // Only full windows paths in the simple X:\blah format are supported
+        if ( ( path.GetLength() < 3 ) ||
+             !IsValidDriveLetter( path[ 0 ] ) ||
+             ( path[ 1 ] != ':' ) ||
+             ( path[ 2 ] != '\\' ) )
+        {
+            return false;
+        }
+
+        // Keep drive letter and colon but normalize to uppercase
+        outNormalizedPath.Append( path.Get(), 3 );
+        outNormalizedPath.ToUpper(); // Drive letter
+
+        // Process the remaining directories
+        const char * pos = path.Get() + 3;
+        while ( pos < path.GetEnd() )
+        {
+            // Find end of current segment (next slash in either direction or end of path)
+            const char* nextSlash = path.Find( '\\', pos );
+            nextSlash = nextSlash ? nextSlash : path.Find( '/', pos );
+
+            // Get the actual name for this part of the path
+            AStackString<> pathSoFar( outNormalizedPath );
+            if ( nextSlash )
+            {
+                pathSoFar.Append( pos, static_cast<uint32_t>( nextSlash - pos ) );
+            }
+            else
+            {
+                pathSoFar += pos;
+            }
+
+            // Get a directory listing of the path so far to get the canonical name
+            WIN32_FIND_DATAA fileFileData;
+            HANDLE findHandle = FindFirstFileA( pathSoFar.Get(), &fileFileData );
+            if ( findHandle != INVALID_HANDLE_VALUE )
+            {
+                FindClose( findHandle );
+
+                // Path exists, so use canonical name
+                outNormalizedPath += fileFileData.cFileName;
+                pos = nextSlash ? nextSlash : path.GetEnd();
+
+                // Add slash between components
+                if ( pos < path.GetEnd() )
+                {
+                    outNormalizedPath += '\\';
+                    ++pos; // Skip over component
+                }
+                continue; // Keep processing path
+            }
+            
+            // Path doesn't exist so keep rest of path as-is
+            outNormalizedPath += pos;
+            break;
+        }
+
+        return true;
+    }
+#endif
+
+//------------------------------------------------------------------------------
+#if defined( __WINDOWS__ )
+    /*static*/ bool FileIO::IsValidDriveLetter( char c )
+    {
+        return ( ( c >= 'A' ) && ( c <= 'Z' ) ) ||
+               ( ( c >= 'a' ) && ( c <= 'z' ) );
+    }
+#endif
+
 // GetDirectoryIsMountPoint
 //------------------------------------------------------------------------------
 #if !defined( __WINDOWS__ )
@@ -645,8 +748,8 @@
         WIN32_FILE_ATTRIBUTE_DATA fileAttribs;
         if ( GetFileAttributesEx( fileName.Get(), GetFileExInfoStandard, &fileAttribs ) )
         {
-            FILETIME ftWrite = fileAttribs.ftLastWriteTime;
-            uint64_t lastWriteTime = (uint64_t)ftWrite.dwLowDateTime | ( (uint64_t)ftWrite.dwHighDateTime << 32 );
+            const FILETIME ftWrite = fileAttribs.ftLastWriteTime;
+            const uint64_t lastWriteTime = (uint64_t)ftWrite.dwLowDateTime | ( (uint64_t)ftWrite.dwHighDateTime << 32 );
             return lastWriteTime;
         }
     #elif defined( __APPLE__ )
@@ -673,9 +776,13 @@
 {
     #if defined( __WINDOWS__ )
         // open the file
-        // TOOD:B Check these args
-        HANDLE hFile = CreateFile( fileName.Get(), GENERIC_WRITE, FILE_SHARE_WRITE, nullptr,
-                                   OPEN_EXISTING, 0, nullptr);
+        HANDLE hFile = CreateFile( fileName.Get(),
+                                   FILE_WRITE_ATTRIBUTES,
+                                   FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                   nullptr,
+                                   OPEN_EXISTING,
+                                   0,
+                                   nullptr);
         if ( hFile == INVALID_HANDLE_VALUE )
         {
             return false;
@@ -752,15 +859,15 @@
 {
     #if defined( __WINDOWS__ )
         // see if dst file is read-only
-        DWORD dwAttrs = GetFileAttributes( fileName );
+        const DWORD dwAttrs = GetFileAttributes( fileName );
         if ( dwAttrs == INVALID_FILE_ATTRIBUTES )
         {
             return false; // can't even get the attributes, nothing more we can do
         }
 
         // determine the new attributes
-        DWORD dwNewAttrs = ( readOnly ) ? ( dwAttrs | FILE_ATTRIBUTE_READONLY )
-                                        : ( dwAttrs & ~FILE_ATTRIBUTE_READONLY );
+        const DWORD dwNewAttrs = ( readOnly ) ? ( dwAttrs | FILE_ATTRIBUTE_READONLY )
+                                              : ( dwAttrs & (uint32_t)(~FILE_ATTRIBUTE_READONLY) );
 
         // nothing to do if they are the same
         if ( dwNewAttrs == dwAttrs )
@@ -781,7 +888,8 @@
         {
             return true; // can't even get the attributes, treat as not read only
         }
-        const bool currentlyReadOnly = !( ( s.st_mode & S_IWUSR ) == S_IWUSR ); // TODO:LINUX Is this the correct behaviour?
+        const uint32_t anyWriteBits = S_IWUSR | S_IWGRP | S_IWOTH;
+        const bool currentlyReadOnly = ( ( s.st_mode & anyWriteBits ) == 0 );
         if ( readOnly == currentlyReadOnly )
         {
             return true; // already in desired state
@@ -790,13 +898,13 @@
         // update writable flag
         if ( readOnly )
         {
-            // remove writable flag
-            s.st_mode &= ( ~S_IWUSR ); // TODO:LINUX Is this the correct behaviour?
+            // remove writable flag for everyone
+            s.st_mode &= ~( S_IWUSR | S_IWGRP | S_IWOTH );
         }
         else
         {
-            // add writable flag
-            s.st_mode |= S_IWUSR; // TODO:LINUX Is this the correct behaviour?
+            // add writable flag for just the user
+            s.st_mode |= S_IWUSR;
         }
 
         if ( chmod( fileName, s.st_mode ) == 0 )
@@ -815,14 +923,14 @@
 {
     #if defined( __WINDOWS__ )
         // see if dst file is read-only
-        DWORD dwAttrs = GetFileAttributes( fileName );
+        const DWORD dwAttrs = GetFileAttributes( fileName );
         if ( dwAttrs == INVALID_FILE_ATTRIBUTES )
         {
             return false; // can't even get the attributes, treat as not read only
         }
 
         // determine the new attributes
-        bool readOnly = ( dwAttrs & FILE_ATTRIBUTE_READONLY );
+        const bool readOnly = ( dwAttrs & FILE_ATTRIBUTE_READONLY );
         return readOnly;
     #elif defined( __LINUX__ ) || defined( __APPLE__ )
         struct stat s;
@@ -841,11 +949,14 @@
 #if defined( __LINUX__ ) || defined( __APPLE__ )
     /*static*/ bool FileIO::SetExecutable( const char * fileName )
     {
-        // rwxr-x--x (751) TODO:LINUX TODO:MAC Is this correct?
-        mode_t mode = S_IRUSR | S_IWUSR | S_IXUSR |
-                      S_IRGRP |           S_IXGRP |
-                                          S_IXOTH;
-        if ( chmod( fileName, mode ) == 0 )
+        struct stat s;
+        if ( lstat( fileName, &s ) != 0 )
+        {
+            return false; // failed to stat
+        }
+
+        s.st_mode |= S_IXUSR | S_IXGRP | S_IXOTH;
+        if ( chmod( fileName, s.st_mode ) == 0 )
         {
             return true;
         }
@@ -1388,7 +1499,7 @@
         // This will sometimes fail, but if we retry until it succeeds, we avoid the
         // problem on the subsequent operation.
         FileStream f;
-        Timer timer;
+        const Timer timer;
         while ( f.Open( fileName.Get(), openMode ) == false )
         {
             Thread::Sleep( 1 );
@@ -1449,7 +1560,7 @@
         DWORD valueSize = sizeof(DWORD);
         const LONG result = ::RegQueryValueEx( key,
                                                 "LongPathsEnabled",
-                                                0,
+                                                nullptr,
                                                 nullptr,
                                                 reinterpret_cast<LPBYTE>( &value ),
                                                 &valueSize );

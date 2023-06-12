@@ -1,17 +1,18 @@
-// Clang
+// Apple Clang 12.0.0
 //------------------------------------------------------------------------------
+
+#define CLANG_SUPPORTS_ARMOSX
 
 // Compiler
 //------------------------------------------------------------------------------
-Compiler( 'Compiler-Clang' )
+Compiler( 'Compiler-Clang12' )
 {
     .Executable                     = 'CLANGXX_BINARY'
-    .CompilerFamily                 = 'clang' // Specify compiler family explicitly because binary name may change at any moment
 
     // Allow tests to activate some experimental behavior
     #if ENABLE_RELATIVE_PATHS
         .UseRelativePaths_Experimental = true
-    #endif    
+    #endif
     #if ENABLE_SOURCE_MAPPING
         .SourceMapping_Experimental = '/fastbuild-test-mapping'
     #endif
@@ -19,19 +20,15 @@ Compiler( 'Compiler-Clang' )
 
 // ToolChain
 //------------------------------------------------------------------------------
-.ToolChain_Clang_OSX =
+.ToolChain_Clang_OSXCommon =
 [
-    .Platform                       = 'x64OSX'
-
     // Compiler Options
-    .Compiler                       = 'Compiler-Clang'
+    .Compiler                       = 'Compiler-Clang12'
     .CommonCompilerOptions          = ' -o "%2" "%1"'   // Input/Output
                                     + ' -c'             // Compile only
                                     + ' -g'             // Generate debug info
-                                    + ' -m64'           // x86_64
                                     + ' -D__OSX__'      // Platform define
                                     + ' -D__APPLE__'    // Platform define
-                                    + ' -D__X64__'      // Architecture define
 
                                     // Include paths
                                     + ' -I./'
@@ -63,6 +60,28 @@ Compiler( 'Compiler-Clang' )
 
     // Exception Control
     .UseExceptions                  = ' -fexceptions'
+]
+
+.ToolChain_Clang_OSX =
+[
+    Using( .ToolChain_Clang_OSXCommon )
+    
+    // Intel 64-bit
+    .Platform                       = 'x64OSX'
+    .CompilerOptions                + ' -arch x86_64'
+    .CompilerOptionsC               + ' -arch x86_64'
+    .LinkerOptions                  + ' -arch x86_64'
+]
+
+.ToolChain_Clang_ARMOSX =
+[
+    Using( .ToolChain_Clang_OSXCommon )
+    
+    // Apple ARM Silicon
+    .Platform                       = 'ARMOSX'
+    .CompilerOptions                + ' -arch arm64'
+    .CompilerOptionsC               + ' -arch arm64'
+    .LinkerOptions                  + ' -arch arm64'
 ]
 
 //------------------------------------------------------------------------------

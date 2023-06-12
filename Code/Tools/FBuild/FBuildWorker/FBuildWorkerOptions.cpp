@@ -31,7 +31,8 @@ FBuildWorkerOptions::FBuildWorkerOptions() :
     m_OverrideWorkMode( false ),
     m_WorkMode( WorkerSettings::WHEN_IDLE ),
     m_MinimumFreeMemoryMiB( 0 ),
-    m_ConsoleMode( false )
+    m_ConsoleMode( false ),
+    m_PeriodicRestart( false )
 {
     #ifdef __LINUX__
         m_ConsoleMode = true; // Only console mode supported on Linux
@@ -63,11 +64,9 @@ bool FBuildWorkerOptions::ProcessCommandLine( const AString & commandLine )
         #endif
         if ( token.BeginsWith( "-cpus=" ) )
         {
-            int32_t numCPUs = (int32_t)Env::GetNumProcessors();
+            const int32_t numCPUs = (int32_t)Env::GetNumProcessors();
             int32_t num( 0 );
-            PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
-            if ( sscanf( token.Get() + 6, "%i", &num ) == 1 ) // TODO:C consider sscanf_s
-            PRAGMA_DISABLE_POP_MSVC // 4996
+            if ( AString::ScanS( token.Get() + 6, "%i", &num ) == 1 )
             {
                 if ( token.EndsWith( '%' ) )
                 {
@@ -116,13 +115,16 @@ bool FBuildWorkerOptions::ProcessCommandLine( const AString & commandLine )
             m_OverrideWorkMode = true;
             continue;
         }
+        else if ( token == "-periodicrestart" )
+        {
+            m_PeriodicRestart = true;
+            continue;
+        }
         #if defined( __WINDOWS__ )
             else if ( token.BeginsWith( "-minfreememory=" ) )
             {
                 uint32_t num( 0 );
-                PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // This function or variable may be unsafe...
-                if ( sscanf( token.Get() + 15, "%u", &num ) == 1 )
-                PRAGMA_DISABLE_POP_MSVC // 4996
+                if ( AString::ScanS( token.Get() + 15, "%u", &num ) == 1 )
                 {
                     m_MinimumFreeMemoryMiB = num;
                 }
@@ -157,7 +159,7 @@ bool FBuildWorkerOptions::ProcessCommandLine( const AString & commandLine )
 void FBuildWorkerOptions::ShowUsageError()
 {
     const char * msg = "FBuildWorker.exe - " FBUILD_VERSION_STRING "\n"
-                       "Copyright 2012-2020 Franta Fulin - https://www.fastbuild.org\n"
+                       "Copyright 2012-2023 Franta Fulin - https://www.fastbuild.org\n"
                        "\n"
                        "Command Line Options:\n"
                        "---------------------------------------------------------------------------\n"
@@ -179,6 +181,8 @@ void FBuildWorkerOptions::ShowUsageError()
                        "        Set minimum free memory (MiB) required to accept work.\n"
                        " -nosubprocess\n"
                        "        (Windows) Don't spawn a sub-process worker copy.\n"
+                       " -periodicrestart\n"
+                       "        Worker will restart every 4 hours.\n"
                        "---------------------------------------------------------------------------\n"
                        ;
 

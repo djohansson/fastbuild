@@ -5,7 +5,7 @@
 // Includes
 //------------------------------------------------------------------------------
 #include "Tools/FBuild/FBuildCore/BFF/BFFStackFrame.h"
-#include "Tools/FBuild/FBuildCore/BFF/Tokenizer/BFFToken.h"
+#include "Tools/FBuild/FBuildCore/BFF/LinkerNodeFileExistsCache.h"
 #include "Tools/FBuild/FBuildCore/BFF/Tokenizer/BFFTokenizer.h"
 
 #include "Core/Env/Assert.h"
@@ -15,6 +15,8 @@
 
 // Forward Declarations
 //------------------------------------------------------------------------------
+class BFFFile;
+class BFFToken;
 class BFFTokenRange;
 class BFFUserFunction;
 class FileStream;
@@ -74,12 +76,12 @@ private:
     bool StoreVariableString( const AString & name, const BFFToken * rhsString, const BFFToken * operatorToken, BFFStackFrame * frame );
     bool StoreVariableArray( const AString & name, const BFFTokenRange & tokenRange, const BFFToken * operatorIter, BFFStackFrame * frame );
     bool StoreVariableStruct( const AString & name, const BFFTokenRange & tokenRange, const BFFToken * operatorToken, BFFStackFrame * frame );
-    bool StoreVariableBool( const AString & name, bool value, BFFStackFrame * frame );
-    bool StoreVariableInt( const AString & name, int value, BFFStackFrame * frame );
+    bool StoreVariableBool( const AString & name, const BFFToken * token, bool value, BFFStackFrame * frame );
+    bool StoreVariableInt( const AString & name, const BFFToken * token, int value, BFFStackFrame * frame );
     bool StoreVariableToVariable( const AString & dstName, const BFFToken * rhsToken, const BFFToken * operatorToken, BFFStackFrame * dstFrame );
 
     void CreateBuiltInVariables();
-    void SetBuiltInVariable_CurrentBFFDir( const char * fileName );
+    void SetBuiltInVariable_CurrentBFFDir( const BFFFile & file );
     BFFUserFunction * GetUserFunction( const AString & name );
 
     NodeGraph & m_NodeGraph;
@@ -87,9 +89,10 @@ private:
     BFFStackFrame m_BaseStackFrame;
 
     // CurrentBFFDir related
-    AString m_CurrentBFFDir;
+    const BFFFile * m_CurrentBFFFile = nullptr;
 
     BFFTokenizer m_Tokenizer;
+    LinkerNodeFileExistsCache m_LinkerNodeFileExistsCache;
 
     BFFParser & operator = (const BFFParser &) = delete;
 };
