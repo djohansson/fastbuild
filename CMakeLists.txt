@@ -48,3 +48,5 @@ file(GLOB_RECURSE FBUILD_SRC_FILES CONFIGURE_DEPENDS
 )
 add_executable(FBuild "${CORE_SRC_FILES}" "${FBUILD_CORE_SRC_FILES}" "${FBUILD_SRC_FILES}")
 target_link_libraries(FBuild PRIVATE lz4::lz4 xxHash::xxhash zstd::libzstd)
+
+install(TARGETS FBuild DESTINATION bin)
