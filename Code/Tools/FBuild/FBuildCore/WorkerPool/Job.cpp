@@ -12,6 +12,7 @@
 #include "Core/FileIO/FileIO.h"
 #include "Core/FileIO/IOStream.h"
 #include "Core/Process/Atomic.h"
+#include "Core/Process/Thread.h"
 #include "Core/Profile/Profile.h"
 #include "Core/Strings/AStackString.h"
 
