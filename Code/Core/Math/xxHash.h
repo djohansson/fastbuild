@@ -7,16 +7,7 @@
 #include "Core/Env/Types.h"
 #include "Core/Strings/AString.h"
 
-// avoid including xxhash header directly
-extern "C"
-{
-    // xxHash
-    unsigned int XXH32( const void * input, size_t length, unsigned seed );
-    unsigned long long XXH64( const void * input, size_t length, unsigned long long seed );
-
-    // xxhash3
-    unsigned long long xxHashLib_XXH3_64bits( const void * input, size_t length );
-};
+#include <xxhash.h>
 
 // xxHash
 //------------------------------------------------------------------------------
@@ -60,7 +51,7 @@ public:
 //------------------------------------------------------------------------------
 /*static*/ uint64_t xxHash3::Calc64( const void * buffer, size_t len )
 {
-    return xxHashLib_XXH3_64bits( buffer, len );
+    return XXH3_64bits( buffer, len );
 }
 
 //------------------------------------------------------------------------------
