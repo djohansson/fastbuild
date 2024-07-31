@@ -4,7 +4,7 @@
 
 // Enabled in DEBUG only
 //------------------------------------------------------------------------------
-#ifdef DEBUG
+#if (defined( DEBUG ) && !defined( USE_CRT_NEW_DELETE ))
     #define MEMTRACKER_ENABLED
 #endif
 

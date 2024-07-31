@@ -129,7 +129,7 @@ void Free( void * ptr )
 
 // Operators
 //------------------------------------------------------------------------------
-#if !(defined(USE_CRT_NEW_DELETE) && USE_CRT_NEW_DELETE)
+#if !defined( USE_CRT_NEW_DELETE )
     #if defined( MEMTRACKER_ENABLED )
         // Via FNEW macros
         void * operator new( size_t size, const char * file, int line ) { return AllocFileLine( size, file, line ); }

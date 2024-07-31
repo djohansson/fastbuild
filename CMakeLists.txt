@@ -22,7 +22,7 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
 endif()
 
 if (USE_CRT_NEW_DELETE)
-	add_compile_options("-DUSE_CRT_NEW_DELETE=1")
+	add_compile_options("-DUSE_CRT_NEW_DELETE")
 endif()
 
 add_compile_options(
