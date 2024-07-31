@@ -21,7 +21,7 @@ endif()
 
 add_compile_options(
 	"$<$<CONFIG:RELEASE>:-DRELEASE>"
-	"$<$<CONFIG:DEBUG>:-DDEBUG>"
+	"$<$<CONFIG:DEBUG>:-DDEBUG -DUSE_CRT_NEW_DELETE>"
 	"-Wno-invalid-offsetof"
 )
 
