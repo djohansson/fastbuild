@@ -129,28 +129,30 @@ void Free( void * ptr )
 
 // Operators
 //------------------------------------------------------------------------------
-#if defined( MEMTRACKER_ENABLED )
-    // Via FNEW macros
-    void * operator new( size_t size, const char * file, int line ) { return AllocFileLine( size, file, line ); }
-    void * operator new[]( size_t size, const char * file, int line ) { return AllocFileLine( size, file, line ); }
-    void operator delete( void * ptr, const char *, int ) { Free( ptr ); }
-    void operator delete[]( void * ptr, const char *, int ) { Free( ptr ); }
+#if !(defined(USE_CRT_NEW_DELETE) && USE_CRT_NEW_DELETE)
+    #if defined( MEMTRACKER_ENABLED )
+        // Via FNEW macros
+        void * operator new( size_t size, const char * file, int line ) { return AllocFileLine( size, file, line ); }
+        void * operator new[]( size_t size, const char * file, int line ) { return AllocFileLine( size, file, line ); }
+        void operator delete( void * ptr, const char *, int ) { Free( ptr ); }
+        void operator delete[]( void * ptr, const char *, int ) { Free( ptr ); }
 
-    // Directly called
-    void * operator new( size_t size ) { return AllocFileLine( size, "Unknown", 0 ); }
-    void * operator new[]( size_t size ) { return AllocFileLine( size, "Unknown", 0 ); }
-    void operator delete( void * ptr ) noexcept { Free( ptr ); }
-    void operator delete( void * ptr, size_t /*size*/ ) noexcept { Free( ptr ); }
-    void operator delete[]( void * ptr ) noexcept { Free( ptr ); }
-    void operator delete[]( void * ptr, size_t /*size*/ ) noexcept { Free( ptr ); }
-#elif !(defined(USE_CRT_NEW_DELETE) && USE_CRT_NEW_DELETE)
-    #if !__has_feature( address_sanitizer ) && !__has_feature( memory_sanitizer ) && !__has_feature( thread_sanitizer ) && !defined( __SANITIZE_ADDRESS__ )
-        void * operator new( size_t size ) { return Alloc( size ); }
-        void * operator new[]( size_t size ) { return Alloc( size ); }
+        // Directly called
+        void * operator new( size_t size ) { return AllocFileLine( size, "Unknown", 0 ); }
+        void * operator new[]( size_t size ) { return AllocFileLine( size, "Unknown", 0 ); }
         void operator delete( void * ptr ) noexcept { Free( ptr ); }
         void operator delete( void * ptr, size_t /*size*/ ) noexcept { Free( ptr ); }
         void operator delete[]( void * ptr ) noexcept { Free( ptr ); }
         void operator delete[]( void * ptr, size_t /*size*/ ) noexcept { Free( ptr ); }
+    #else
+        #if !__has_feature( address_sanitizer ) && !__has_feature( memory_sanitizer ) && !__has_feature( thread_sanitizer ) && !defined( __SANITIZE_ADDRESS__ )
+            void * operator new( size_t size ) { return Alloc( size ); }
+            void * operator new[]( size_t size ) { return Alloc( size ); }
+            void operator delete( void * ptr ) noexcept { Free( ptr ); }
+            void operator delete( void * ptr, size_t /*size*/ ) noexcept { Free( ptr ); }
+            void operator delete[]( void * ptr ) noexcept { Free( ptr ); }
+            void operator delete[]( void * ptr, size_t /*size*/ ) noexcept { Free( ptr ); }
+        #endif
     #endif
 #endif
 //------------------------------------------------------------------------------
