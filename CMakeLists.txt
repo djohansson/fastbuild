@@ -8,6 +8,8 @@ find_package(zstd CONFIG REQUIRED)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
+option(USE_CRT_NEW_DELETE "Use vanilla new & delete from C runtime" OFF)
+
 if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
 	# set(CMAKE_OSX_ARCHITECTURES arm64;x86_64)
 	# set(CMAKE_OSX_SYSROOT $ENV{MACOS_SDK_PATH})
@@ -19,9 +21,13 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Linux")
 	add_compile_options("-D__LINUX__")
 endif()
 
+if (USE_CRT_NEW_DELETE)
+	add_compile_options("-DUSE_CRT_NEW_DELETE=1")
+endif()
+
 add_compile_options(
 	"$<$<CONFIG:RELEASE>:-DRELEASE>"
-	"$<$<CONFIG:DEBUG>:-DDEBUG -DUSE_CRT_NEW_DELETE>"
+	"$<$<CONFIG:DEBUG>:-DDEBUG>"
 	"-Wno-invalid-offsetof"
 )
 
