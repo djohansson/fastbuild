@@ -56,4 +56,8 @@ file(GLOB_RECURSE FBUILD_SRC_FILES CONFIGURE_DEPENDS
 add_executable(FBuild "${CORE_SRC_FILES}" "${FBUILD_CORE_SRC_FILES}" "${FBUILD_SRC_FILES}")
 target_link_libraries(FBuild PRIVATE lz4::lz4 xxHash::xxhash zstd::libzstd)
 
+if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+  target_link_libraries(FBuild advapi32 iphlpapi kernel32 shell32 user32 ws2_32)
+endif()
+
 install(TARGETS FBuild DESTINATION bin)
